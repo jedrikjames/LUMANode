@@ -406,6 +406,7 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var job DeployJob
+	var signedEnvelope *signedDeployJob
 	if a.cfg.JobSigningSecret != "" {
 		var envelope signedDeployJob
 		if err := json.Unmarshal(body, &envelope); err != nil {
@@ -417,11 +418,8 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
-		if err := a.acceptSignedDeployment(envelope, time.Now()); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
 		job = verifiedJob
+		signedEnvelope = &envelope
 	} else if err := json.Unmarshal(body, &job); err != nil {
 		http.Error(w, "invalid deployment job", http.StatusBadRequest)
 		return
@@ -429,6 +427,16 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 	if err := validateDeploymentJob(job, a.cfg.NodeID); err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
+	}
+	if a.cfg.RequireImageDigest && job.ImageDigest == "" {
+		http.Error(w, "deployment job requires immutable image digest", http.StatusUnprocessableEntity)
+		return
+	}
+	if signedEnvelope != nil {
+		if err := a.acceptSignedDeployment(*signedEnvelope, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 	}
 	plan, err := deploymentPlan(job)
 	if err != nil {

@@ -28,6 +28,7 @@ func main() {
 	flag.StringVar(&cfg.RevocationListFile, "revocation-list", os.Getenv("LUMANODE_REVOCATION_LIST"), "JSON or line-delimited revoked client certificate fingerprint list")
 	flag.StringVar(&cfg.RuntimeCgroupControllersFile, "cgroup-controllers", "/sys/fs/cgroup/cgroup.controllers", "cgroups v2 controllers file used for runtime preflight")
 	flag.DurationVar(&cfg.CertificateRotationWindow, "cert-rotation-window", 14*24*time.Hour, "rotate the node client certificate when it expires within this duration")
+	flag.BoolVar(&cfg.RequireImageDigest, "require-image-digest", os.Getenv("LUMANODE_REQUIRE_IMAGE_DIGEST") == "true", "reject real deployments unless the signed job includes a sha256 image digest")
 	flag.Parse()
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

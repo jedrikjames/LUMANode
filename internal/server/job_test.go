@@ -1094,6 +1094,39 @@ func TestDeployRejectsReplayedSignedEnvelope(t *testing.T) {
 	}
 }
 
+func TestDeployCanRequireImmutableImageDigest(t *testing.T) {
+	secret := "test-signing-secret"
+	job := sampleJob()
+	unsignedEnvelope := signSampleJob(t, job, secret, time.Now().Add(10*time.Minute))
+	body, err := json.Marshal(unsignedEnvelope)
+	if err != nil {
+		t.Fatalf("marshal signed envelope: %v", err)
+	}
+	agent := New(config.Config{NodeID: "node_local", JobSigningSecret: secret, RequireImageDigest: true}, slog.Default())
+
+	missingDigest := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(missingDigest, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(body)))
+	if missingDigest.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected digest policy rejection, got %d: %s", missingDigest.Code, missingDigest.Body.String())
+	}
+	if !strings.Contains(missingDigest.Body.String(), "requires immutable image digest") {
+		t.Fatalf("expected digest policy error body, got %q", missingDigest.Body.String())
+	}
+
+	// Policy failures are not added to the replay cache, so a corrected signed job can still run.
+	job.ImageDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	signedPinnedJob := signSampleJob(t, job, secret, time.Now().Add(10*time.Minute))
+	pinnedBody, err := json.Marshal(signedPinnedJob)
+	if err != nil {
+		t.Fatalf("marshal pinned signed envelope: %v", err)
+	}
+	accepted := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(accepted, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(pinnedBody)))
+	if accepted.Code != http.StatusOK {
+		t.Fatalf("expected digest-pinned deployment to be accepted, got %d: %s", accepted.Code, accepted.Body.String())
+	}
+}
+
 func TestDeployRejectsReplayedSignedEnvelopeAfterRestart(t *testing.T) {
 	secret := "test-signing-secret"
 	replayStore := filepath.Join(t.TempDir(), "replayed-jobs.json")
