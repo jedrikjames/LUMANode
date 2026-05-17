@@ -59,6 +59,9 @@ type RuntimeStatus struct {
 	Errors                       map[string]string `json:"errors,omitempty"`
 }
 
+var containerHealthWait = 2 * time.Minute
+var containerHealthPoll = 2 * time.Second
+
 type hostCapacity struct {
 	CPUCores float64
 	MemoryMB int
@@ -971,22 +974,14 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if plan.ContainerName == "" {
 		return fmt.Errorf("docker container verification missing container name")
 	}
-	output, err := exec.CommandContext(
-		ctx,
-		"docker",
-		"inspect",
-		"-f",
-		`{{ .State.Running }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }}`,
-		plan.ContainerName,
-	).CombinedOutput()
+	state, err := inspectStartedContainerState(ctx, plan.ContainerName)
 	if err != nil {
-		return fmt.Errorf("docker container state inspect failed: %w: %s", err, string(output))
+		return err
 	}
-	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) == 0 || fields[0] != "true" {
+	if !state.Running {
 		return fmt.Errorf("docker container %q is not running after start", plan.ContainerName)
 	}
-	if len(fields) < 5 || fields[2] != "true" || fields[3] != plan.DeploymentID || fields[4] != plan.TenantID {
+	if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID {
 		return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
 	}
 	if err := verifyStartedContainerIsolation(ctx, plan); err != nil {
@@ -1004,13 +999,78 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if plan.Healthcheck == "" {
 		return nil
 	}
-	if len(fields) < 2 || fields[1] == "none" {
-		return fmt.Errorf("docker container %q is missing expected health status", plan.ContainerName)
+	return waitForStartedContainerHealthy(ctx, plan)
+}
+
+type startedContainerState struct {
+	Running      bool
+	Health       string
+	Managed      bool
+	DeploymentID string
+	TenantID     string
+}
+
+func inspectStartedContainerState(ctx context.Context, containerName string) (startedContainerState, error) {
+	output, err := exec.CommandContext(
+		ctx,
+		"docker",
+		"inspect",
+		"-f",
+		`{{ .State.Running }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }}`,
+		containerName,
+	).CombinedOutput()
+	if err != nil {
+		return startedContainerState{}, fmt.Errorf("docker container state inspect failed: %w: %s", err, string(output))
 	}
-	if fields[1] == "unhealthy" {
-		return fmt.Errorf("docker container %q reported unhealthy after start", plan.ContainerName)
+	fields := strings.Fields(strings.TrimSpace(string(output)))
+	if len(fields) < 5 {
+		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned incomplete data", containerName)
 	}
-	return nil
+	return startedContainerState{
+		Running:      fields[0] == "true",
+		Health:       fields[1],
+		Managed:      fields[2] == "true",
+		DeploymentID: fields[3],
+		TenantID:     fields[4],
+	}, nil
+}
+
+func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) error {
+	deadline := time.NewTimer(containerHealthWait)
+	defer deadline.Stop()
+	for {
+		state, err := inspectStartedContainerState(ctx, plan.ContainerName)
+		if err != nil {
+			return err
+		}
+		if !state.Running {
+			return fmt.Errorf("docker container %q stopped before becoming healthy", plan.ContainerName)
+		}
+		if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID {
+			return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
+		}
+		switch state.Health {
+		case "healthy":
+			return nil
+		case "none":
+			return fmt.Errorf("docker container %q is missing expected health status", plan.ContainerName)
+		case "unhealthy":
+			return fmt.Errorf("docker container %q reported unhealthy after start", plan.ContainerName)
+		case "starting":
+		default:
+			return fmt.Errorf("docker container %q reported unexpected health status %q", plan.ContainerName, state.Health)
+		}
+		poll := time.NewTimer(containerHealthPoll)
+		select {
+		case <-ctx.Done():
+			poll.Stop()
+			return fmt.Errorf("docker container %q did not become healthy: %w", plan.ContainerName, ctx.Err())
+		case <-deadline.C:
+			poll.Stop()
+			return fmt.Errorf("docker container %q did not become healthy before timeout", plan.ContainerName)
+		case <-poll.C:
+		}
+	}
 }
 
 func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error {

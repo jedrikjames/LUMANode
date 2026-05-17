@@ -1674,6 +1674,93 @@ exit 0
 	}
 }
 
+func TestExecuteDeploymentPlanWaitsForHealthyStartedContainer(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "docker.log")
+	stateFile := filepath.Join(tempDir, "container-state")
+	previousWait := containerHealthWait
+	previousPoll := containerHealthPoll
+	containerHealthWait = 25 * time.Millisecond
+	containerHealthPoll = time.Millisecond
+	t.Cleanup(func() {
+		containerHealthWait = previousWait
+		containerHealthPoll = previousPoll
+	})
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "network" ] && [ "$2" = "inspect" ] && [ "$3" = "-f" ]; then
+  echo "true tenant_demo false"
+  exit 0
+fi
+if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      exit 0
+      ;;
+    *.HostConfig.NanoCpus*)
+      echo "1500000000 536870912 536870912 5g json-file 10m 3"
+      exit 0
+      ;;
+    *.HostConfig.Privileged*)
+      echo "false true 512 none private no luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      exit 0
+      ;;
+    *.State.Running*)
+      echo "true starting true dep_test tenant_demo"
+      exit 0
+      ;;
+    *luma.managed*)
+      if [ -f "$CONTAINER_STATE" ]; then
+        echo "true dep_test"
+        exit 0
+      fi
+      echo "No such container" >&2
+      exit 1
+      ;;
+  esac
+fi
+if [ "$1" = "run" ]; then
+  touch "$CONTAINER_STATE"
+fi
+if [ "$1" = "rm" ]; then
+  rm -f "$CONTAINER_STATE"
+fi
+printf '%s\n' "$*" >> "$DOCKER_LOG"
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+exit 0
+`)
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_LOG", logFile)
+	t.Setenv("CONTAINER_STATE", stateFile)
+
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	err = executeDeploymentPlan(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "did not become healthy before timeout") {
+		t.Fatalf("expected starting health status to fail after timeout, got %v", err)
+	}
+	content, readErr := os.ReadFile(logFile)
+	if readErr != nil {
+		t.Fatalf("read docker log: %v", readErr)
+	}
+	log := string(content)
+	if !strings.Contains(log, "rm --force luma-dep_test") {
+		t.Fatalf("expected starting container cleanup, got %q", log)
+	}
+	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
+		t.Fatalf("expected cleanup to remove container state, statErr=%v", statErr)
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithMismatchedOwnershipLabels(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
