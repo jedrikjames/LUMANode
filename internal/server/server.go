@@ -55,6 +55,7 @@ type RuntimeStatus struct {
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
 	DockerLocalEndpoint          bool              `json:"dockerLocalEndpoint"`
+	DockerSocketProtected        bool              `json:"dockerSocketProtected"`
 	Nftables                     bool              `json:"nftables"`
 	CgroupV2                     bool              `json:"cgroupV2"`
 	Errors                       map[string]string `json:"errors,omitempty"`
@@ -692,6 +693,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["dockerEndpoint"] = err.Error()
 		} else if dockerEndpointLocal(endpoint) {
 			status.DockerLocalEndpoint = true
+			if protected, err := dockerSocketProtected(endpoint); err != nil {
+				status.Errors["dockerSocket"] = err.Error()
+			} else if protected {
+				status.DockerSocketProtected = true
+			} else {
+				status.Errors["dockerSocket"] = "docker unix socket must not be world-writable"
+			}
 		} else {
 			status.Errors["dockerEndpoint"] = "docker endpoint must be a local unix socket, not " + endpoint
 		}
@@ -712,7 +720,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -737,6 +745,28 @@ func dockerEndpoint(ctx context.Context) (string, error) {
 func dockerEndpointLocal(endpoint string) bool {
 	endpoint = strings.ToLower(strings.TrimSpace(endpoint))
 	return endpoint == "" || strings.HasPrefix(endpoint, "unix://")
+}
+
+func dockerSocketProtected(endpoint string) (bool, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return true, nil
+	}
+	if !strings.HasPrefix(strings.ToLower(endpoint), "unix://") {
+		return false, nil
+	}
+	socketPath := strings.TrimSpace(endpoint[len("unix://"):])
+	if socketPath == "" {
+		return false, fmt.Errorf("docker unix socket path is empty")
+	}
+	info, err := os.Stat(socketPath)
+	if err != nil {
+		return false, fmt.Errorf("docker unix socket stat failed: %w", err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
+	}
+	return info.Mode().Perm()&0o002 == 0, nil
 }
 
 func dockerServerVersionSupported(version string) bool {
