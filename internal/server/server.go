@@ -428,7 +428,8 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
-	if a.cfg.RequireImageDigest && job.ImageDigest == "" {
+	realExecution := os.Getenv("LUMANODE_DRY_RUN") == "false"
+	if realExecution && a.cfg.RequireImageDigest && job.ImageDigest == "" {
 		http.Error(w, "deployment job requires immutable image digest", http.StatusUnprocessableEntity)
 		return
 	}
@@ -443,7 +444,7 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
-	if os.Getenv("LUMANODE_DRY_RUN") != "false" {
+	if !realExecution {
 		writeJSON(w, map[string]any{"status": "planned", "plan": plan, "dockerArgs": plan.ContainerRun.Args})
 		return
 	}

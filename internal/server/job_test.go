@@ -1104,6 +1104,18 @@ func TestDeployCanRequireImmutableImageDigest(t *testing.T) {
 	}
 	agent := New(config.Config{NodeID: "node_local", JobSigningSecret: secret, RequireImageDigest: true}, slog.Default())
 
+	dryRunEnvelope := signSampleJob(t, job, secret, time.Now().Add(11*time.Minute))
+	dryRunBody, err := json.Marshal(dryRunEnvelope)
+	if err != nil {
+		t.Fatalf("marshal dry-run signed envelope: %v", err)
+	}
+	dryRun := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(dryRun, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(dryRunBody)))
+	if dryRun.Code != http.StatusOK {
+		t.Fatalf("expected digest policy to allow dry-run planning, got %d: %s", dryRun.Code, dryRun.Body.String())
+	}
+
+	t.Setenv("LUMANODE_DRY_RUN", "false")
 	missingDigest := httptest.NewRecorder()
 	agent.server.Handler.ServeHTTP(missingDigest, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(body)))
 	if missingDigest.Code != http.StatusUnprocessableEntity {
@@ -1114,6 +1126,7 @@ func TestDeployCanRequireImmutableImageDigest(t *testing.T) {
 	}
 
 	// Policy failures are not added to the replay cache, so a corrected signed job can still run.
+	t.Setenv("LUMANODE_DRY_RUN", "true")
 	job.ImageDigest = "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	signedPinnedJob := signSampleJob(t, job, secret, time.Now().Add(10*time.Minute))
 	pinnedBody, err := json.Marshal(signedPinnedJob)
