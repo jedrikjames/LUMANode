@@ -16,6 +16,7 @@ import (
 	"fmt"
 	"log/slog"
 	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -211,6 +212,9 @@ func TestDeploymentPlanIncludesPreflightSteps(t *testing.T) {
 	if len(plan.Mounts) != 2 || plan.Mounts[0].Source != "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test" || plan.Mounts[0].Target != "/data" || plan.Mounts[0].ReadOnly {
 		t.Fatalf("expected deployment plan to retain signed mount policy, got %#v", plan.Mounts)
 	}
+	if len(plan.Ports) != 1 || plan.Ports[0].HostPort != 8080 || plan.Ports[0].ContainerPort != 80 || plan.Ports[0].Protocol != "tcp" {
+		t.Fatalf("expected deployment plan to retain signed port policy, got %#v", plan.Ports)
+	}
 	if !slices.Equal(plan.NetworkInspect.Args, []string{"network", "inspect", "luma-tenant_demo"}) {
 		t.Fatalf("unexpected network inspect command: %#v", plan.NetworkInspect)
 	}
@@ -285,6 +289,46 @@ func TestHostCapacityPreflightRejectsOvercommit(t *testing.T) {
 				t.Fatalf("expected %q capacity error, got %v", tt.contains, err)
 			}
 		})
+	}
+}
+
+func TestHostPortPreflightRejectsBoundTCPPort(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to bind test listener: %v", err)
+	}
+	defer listener.Close()
+	port := listener.Addr().(*net.TCPAddr).Port
+	job := sampleJob()
+	job.Ports[0].HostPort = port
+	plan, err := deploymentPlan(job)
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = validateHostPortsAvailable(plan)
+	if err == nil || !strings.Contains(err.Error(), "tcp/") {
+		t.Fatalf("expected bound TCP port preflight failure, got %v", err)
+	}
+}
+
+func TestHostPortPreflightAcceptsAvailableUDPPort(t *testing.T) {
+	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("failed to bind test UDP socket: %v", err)
+	}
+	port := conn.LocalAddr().(*net.UDPAddr).Port
+	if err := conn.Close(); err != nil {
+		t.Fatalf("failed to release test UDP socket: %v", err)
+	}
+	job := sampleJob()
+	job.Ports[0].HostPort = port
+	job.Ports[0].Protocol = "udp"
+	plan, err := deploymentPlan(job)
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	if err := validateHostPortsAvailable(plan); err != nil {
+		t.Fatalf("expected available UDP port preflight to pass, got %v", err)
 	}
 }
 
@@ -478,6 +522,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "docker run failed") {
 		t.Fatalf("expected docker run failure, got %v", err)
@@ -1373,6 +1418,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "empty container IP") {
 		t.Fatalf("expected egress hardening failure, got %v", err)
@@ -1466,6 +1512,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	if err := executeDeploymentPlan(context.Background(), plan); err != nil {
 		t.Fatalf("expected allow-all redeploy to prune stale egress and pass, got %v", err)
 	}
@@ -1543,6 +1590,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "reported unhealthy") {
 		t.Fatalf("expected unhealthy container verification failure, got %v", err)
@@ -1624,6 +1672,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "ownership labels") {
 		t.Fatalf("expected container ownership verification failure, got %v", err)
@@ -1701,6 +1750,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "started privileged") {
 		t.Fatalf("expected container isolation verification failure, got %v", err)
@@ -1778,6 +1828,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "unexpected network attachment count") {
 		t.Fatalf("expected container network attachment verification failure, got %v", err)
@@ -1855,6 +1906,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "bind mount policy") {
 		t.Fatalf("expected container mount verification failure, got %v", err)
@@ -1932,6 +1984,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "expected security options") {
 		t.Fatalf("expected security profile drift verification failure, got %v", err)
@@ -2015,6 +2068,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "digest-pinned image") {
 		t.Fatalf("expected image digest drift verification failure, got %v", err)
@@ -2092,6 +2146,7 @@ exit 0
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
 	}
+	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "expected CPU limit") {
 		t.Fatalf("expected container resource verification failure, got %v", err)

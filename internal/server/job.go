@@ -115,6 +115,7 @@ type DeploymentPlan struct {
 	Healthcheck     string        `json:"healthcheck,omitempty"`
 	Directories     []string      `json:"directories"`
 	Mounts          []MountPlan   `json:"mounts"`
+	Ports           []PortPlan    `json:"ports"`
 	NetworkInspect  CommandPlan   `json:"networkInspect"`
 	NetworkCreate   CommandPlan   `json:"networkCreate"`
 	Firewall        []CommandPlan `json:"firewall"`
@@ -133,6 +134,12 @@ type MountPlan struct {
 	Source   string `json:"source"`
 	Target   string `json:"target"`
 	ReadOnly bool   `json:"readOnly"`
+}
+
+type PortPlan struct {
+	HostPort      int    `json:"hostPort"`
+	ContainerPort int    `json:"containerPort"`
+	Protocol      string `json:"protocol"`
 }
 
 func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Time) (DeployJob, error) {
@@ -544,10 +551,18 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 	}
 	directorySet := map[string]struct{}{}
 	mounts := make([]MountPlan, 0, len(job.Mounts))
+	ports := make([]PortPlan, 0, len(job.Ports))
 	for _, mount := range job.Mounts {
 		source := filepath.Clean(mount.Source)
 		directorySet[source] = struct{}{}
 		mounts = append(mounts, MountPlan{Source: source, Target: mount.Target, ReadOnly: mount.ReadOnly})
+	}
+	for _, port := range job.Ports {
+		protocol := port.Protocol
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		ports = append(ports, PortPlan{HostPort: port.HostPort, ContainerPort: port.ContainerPort, Protocol: protocol})
 	}
 	directories := make([]string, 0, len(directorySet))
 	for directory := range directorySet {
@@ -580,6 +595,7 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 		Healthcheck: job.Healthcheck,
 		Directories: directories,
 		Mounts:      mounts,
+		Ports:       ports,
 		NetworkInspect: CommandPlan{
 			Name: "docker",
 			Args: []string{"network", "inspect", job.Network.Name},

@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"math"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -663,6 +664,9 @@ func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
 	if err := validateHostCapacity(plan, capacity); err != nil {
 		return err
 	}
+	if err := validateHostPortsAvailable(plan); err != nil {
+		return err
+	}
 	if err := ensureDeploymentDirectories(plan); err != nil {
 		return err
 	}
@@ -699,6 +703,38 @@ func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
 			return fmt.Errorf("post-start egress hardening failed: %w; cleanup failed: %v", err, cleanupErr)
 		}
 		return err
+	}
+	return nil
+}
+
+func validateHostPortsAvailable(plan DeploymentPlan) error {
+	checked := map[string]struct{}{}
+	for _, port := range plan.Ports {
+		protocol := strings.ToLower(strings.TrimSpace(port.Protocol))
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		key := fmt.Sprintf("%s/%d", protocol, port.HostPort)
+		if _, exists := checked[key]; exists {
+			continue
+		}
+		checked[key] = struct{}{}
+		switch protocol {
+		case "tcp":
+			listener, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(port.HostPort)))
+			if err != nil {
+				return fmt.Errorf("host port preflight failed: tcp/%d is not available: %w", port.HostPort, err)
+			}
+			_ = listener.Close()
+		case "udp":
+			conn, err := net.ListenPacket("udp", net.JoinHostPort("", strconv.Itoa(port.HostPort)))
+			if err != nil {
+				return fmt.Errorf("host port preflight failed: udp/%d is not available: %w", port.HostPort, err)
+			}
+			_ = conn.Close()
+		default:
+			return fmt.Errorf("host port preflight failed: unsupported protocol %q", port.Protocol)
+		}
 	}
 	return nil
 }
