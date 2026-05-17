@@ -1159,7 +1159,15 @@ if [ "$1" = "info" ]; then
     echo true
     exit 0
   fi
+  if [ "$3" = "{{.Driver}}" ]; then
+    echo overlay2
+    exit 0
+  fi
   echo 2
+  exit 0
+fi
+if [ "$1" = "version" ]; then
+  echo 25.0.3
   exit 0
 fi
 exit 0
@@ -1170,7 +1178,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerServerVersionSupported || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1194,7 +1202,15 @@ if [ "$1" = "info" ]; then
     echo false
     exit 0
   fi
+  if [ "$3" = "{{.Driver}}" ]; then
+    echo aufs
+    exit 0
+  fi
   echo 2
+  exit 0
+fi
+if [ "$1" = "version" ]; then
+  echo 20.10.24
   exit 0
 fi
 exit 0
@@ -1208,11 +1224,30 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore {
-		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore support, got %#v", status)
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerServerVersionSupported {
+		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerServerVersion"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
+	}
+}
+
+func TestDockerServerVersionSupported(t *testing.T) {
+	tests := []struct {
+		version string
+		want    bool
+	}{
+		{version: "24.0.0", want: true},
+		{version: "25.0.3", want: true},
+		{version: "24.0.7+azure", want: true},
+		{version: "23.0.6", want: false},
+		{version: "20.10.24", want: false},
+		{version: "bad-version", want: false},
+	}
+	for _, test := range tests {
+		if got := dockerServerVersionSupported(test.version); got != test.want {
+			t.Fatalf("dockerServerVersionSupported(%q) = %v, want %v", test.version, got, test.want)
+		}
 	}
 }
 

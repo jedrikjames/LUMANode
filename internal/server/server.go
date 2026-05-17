@@ -45,16 +45,18 @@ type Metrics struct {
 }
 
 type RuntimeStatus struct {
-	Ready               bool              `json:"ready"`
-	Docker              bool              `json:"docker"`
-	DockerCgroupV2      bool              `json:"dockerCgroupV2"`
-	DockerSeccomp       bool              `json:"dockerSeccomp"`
-	DockerAppArmor      bool              `json:"dockerAppArmor"`
-	DockerUserNamespace bool              `json:"dockerUserNamespace"`
-	DockerLiveRestore   bool              `json:"dockerLiveRestore"`
-	Nftables            bool              `json:"nftables"`
-	CgroupV2            bool              `json:"cgroupV2"`
-	Errors              map[string]string `json:"errors,omitempty"`
+	Ready                        bool              `json:"ready"`
+	Docker                       bool              `json:"docker"`
+	DockerCgroupV2               bool              `json:"dockerCgroupV2"`
+	DockerSeccomp                bool              `json:"dockerSeccomp"`
+	DockerAppArmor               bool              `json:"dockerAppArmor"`
+	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
+	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
+	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
+	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
+	Nftables                     bool              `json:"nftables"`
+	CgroupV2                     bool              `json:"cgroupV2"`
+	Errors                       map[string]string `json:"errors,omitempty"`
 }
 
 type hostCapacity struct {
@@ -650,6 +652,28 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerLiveRestore"] = "docker daemon live-restore is not enabled"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Driver}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerStorageOverlay2"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerStorageOverlay2"] == "" {
+				status.Errors["dockerStorageOverlay2"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "overlay2") {
+			status.DockerStorageOverlay2 = true
+		} else {
+			status.Errors["dockerStorageOverlay2"] = "docker storage driver is not overlay2"
+		}
+		output, err = exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerServerVersion"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerServerVersion"] == "" {
+				status.Errors["dockerServerVersion"] = err.Error()
+			}
+		} else if dockerServerVersionSupported(strings.TrimSpace(string(output))) {
+			status.DockerServerVersionSupported = true
+		} else {
+			status.Errors["dockerServerVersion"] = "docker server version must be 24.0.0 or newer"
+		}
 	}
 	if _, err := exec.LookPath("nft"); err != nil {
 		status.Errors["nftables"] = "nft CLI not found"
@@ -667,11 +691,41 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
 	return status
+}
+
+func dockerServerVersionSupported(version string) bool {
+	parts := strings.Split(strings.TrimSpace(version), ".")
+	if len(parts) < 2 {
+		return false
+	}
+	major, err := strconv.Atoi(versionNumberPrefix(parts[0]))
+	if err != nil {
+		return false
+	}
+	minor, err := strconv.Atoi(versionNumberPrefix(parts[1]))
+	if err != nil {
+		return false
+	}
+	if major > 24 {
+		return true
+	}
+	return major == 24 && minor >= 0
+}
+
+func versionNumberPrefix(part string) string {
+	var builder strings.Builder
+	for _, r := range part {
+		if r < '0' || r > '9' {
+			break
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
 }
 
 func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
