@@ -54,6 +54,7 @@ type RuntimeStatus struct {
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
+	DockerLocalEndpoint          bool              `json:"dockerLocalEndpoint"`
 	Nftables                     bool              `json:"nftables"`
 	CgroupV2                     bool              `json:"cgroupV2"`
 	Errors                       map[string]string `json:"errors,omitempty"`
@@ -686,6 +687,14 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerServerVersion"] = "docker server version must be 24.0.0 or newer"
 		}
+		endpoint, err := dockerEndpoint(ctx)
+		if err != nil {
+			status.Errors["dockerEndpoint"] = err.Error()
+		} else if dockerEndpointLocal(endpoint) {
+			status.DockerLocalEndpoint = true
+		} else {
+			status.Errors["dockerEndpoint"] = "docker endpoint must be a local unix socket, not " + endpoint
+		}
 	}
 	if _, err := exec.LookPath("nft"); err != nil {
 		status.Errors["nftables"] = "nft CLI not found"
@@ -703,11 +712,31 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
 	return status
+}
+
+func dockerEndpoint(ctx context.Context) (string, error) {
+	if dockerHost := strings.TrimSpace(os.Getenv("DOCKER_HOST")); dockerHost != "" {
+		return dockerHost, nil
+	}
+	output, err := exec.CommandContext(ctx, "docker", "context", "inspect", "--format", "{{.Endpoints.docker.Host}}").CombinedOutput()
+	if err != nil {
+		trimmed := strings.TrimSpace(string(output))
+		if trimmed != "" {
+			return "", fmt.Errorf("%s", trimmed)
+		}
+		return "", err
+	}
+	return strings.Trim(strings.TrimSpace(string(output)), `"`), nil
+}
+
+func dockerEndpointLocal(endpoint string) bool {
+	endpoint = strings.ToLower(strings.TrimSpace(endpoint))
+	return endpoint == "" || strings.HasPrefix(endpoint, "unix://")
 }
 
 func dockerServerVersionSupported(version string) bool {

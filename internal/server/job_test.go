@@ -1224,11 +1224,55 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerServerVersionSupported || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
 		t.Fatalf("expected Docker seccomp/AppArmor/userns readiness, got %#v", status)
+	}
+}
+
+func TestRuntimeStatusRejectsRemoteDockerEndpoint(t *testing.T) {
+	tempDir := t.TempDir()
+	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+		t.Fatalf("write cgroup controllers: %v", err)
+	}
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "info" ]; then
+  if [ "$3" = "{{json .SecurityOptions}}" ]; then
+    echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
+    exit 0
+  fi
+  if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.Driver}}" ]; then
+    echo overlay2
+    exit 0
+  fi
+  echo 2
+  exit 0
+fi
+if [ "$1" = "version" ]; then
+  echo 25.0.3
+  exit 0
+fi
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", "#!/bin/sh\nexit 0\n")
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+
+	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
+	status := agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerLocalEndpoint {
+		t.Fatalf("expected remote Docker endpoint to fail runtime readiness, got %#v", status)
+	}
+	if status.Errors["dockerEndpoint"] == "" {
+		t.Fatalf("expected Docker endpoint error, got %#v", status.Errors)
 	}
 }
 
