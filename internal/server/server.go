@@ -51,6 +51,7 @@ type RuntimeStatus struct {
 	DockerSeccomp       bool              `json:"dockerSeccomp"`
 	DockerAppArmor      bool              `json:"dockerAppArmor"`
 	DockerUserNamespace bool              `json:"dockerUserNamespace"`
+	DockerLiveRestore   bool              `json:"dockerLiveRestore"`
 	Nftables            bool              `json:"nftables"`
 	CgroupV2            bool              `json:"cgroupV2"`
 	Errors              map[string]string `json:"errors,omitempty"`
@@ -638,6 +639,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 				status.Errors["dockerUserNamespace"] = "docker daemon does not advertise user namespace or rootless isolation"
 			}
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.LiveRestoreEnabled}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerLiveRestore"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerLiveRestore"] == "" {
+				status.Errors["dockerLiveRestore"] = err.Error()
+			}
+		} else if strings.TrimSpace(strings.ToLower(string(output))) == "true" {
+			status.DockerLiveRestore = true
+		} else {
+			status.Errors["dockerLiveRestore"] = "docker daemon live-restore is not enabled"
+		}
 	}
 	if _, err := exec.LookPath("nft"); err != nil {
 		status.Errors["nftables"] = "nft CLI not found"
@@ -655,7 +667,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}

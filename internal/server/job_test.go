@@ -1155,6 +1155,10 @@ if [ "$1" = "info" ]; then
     echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
     exit 0
   fi
+  if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
+    echo true
+    exit 0
+  fi
   echo 2
   exit 0
 fi
@@ -1166,7 +1170,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1186,6 +1190,10 @@ if [ "$1" = "info" ]; then
     echo '["name=cgroupns"]'
     exit 0
   fi
+  if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
+    echo false
+    exit 0
+  fi
   echo 2
   exit 0
 fi
@@ -1200,10 +1208,10 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace {
-		t.Fatalf("expected missing Docker seccomp/AppArmor/userns support, got %#v", status)
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore {
+		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
 	}
 }
