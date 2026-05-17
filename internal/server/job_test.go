@@ -389,6 +389,26 @@ func TestEnsureTenantDirectoryRejectsSymlinkedPathComponent(t *testing.T) {
 	}
 }
 
+func TestEnsureTenantDirectoryRejectsWorldWritableTenantPathComponent(t *testing.T) {
+	tenantRoot := filepath.Join(t.TempDir(), "tenant_demo")
+	deployments := filepath.Join(tenantRoot, "deployments")
+	if err := os.MkdirAll(deployments, 0o750); err != nil {
+		t.Fatalf("create deployment directory: %v", err)
+	}
+	if err := os.Chmod(deployments, 0o777); err != nil {
+		t.Fatalf("make deployment directory world-writable: %v", err)
+	}
+
+	target := filepath.Join(deployments, "dep_test")
+	err := ensureTenantDirectory(tenantRoot, target)
+	if err == nil || !strings.Contains(err.Error(), "world-writable tenant path component") {
+		t.Fatalf("expected world-writable tenant directory refusal, got %v", err)
+	}
+	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+		t.Fatalf("expected preflight not to create child inside world-writable directory, statErr=%v", statErr)
+	}
+}
+
 func TestFirewallCommandsDeduplicatePublishedPorts(t *testing.T) {
 	job := sampleJob()
 	job.Ports = append(job.Ports, job.Ports[0])

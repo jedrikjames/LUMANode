@@ -836,11 +836,12 @@ func ensureTenantDirectory(tenantRoot string, directory string) error {
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("deployment directory %q escapes tenant root %q", directory, tenantRoot)
 	}
-	return mkdirAllNoSymlinks(directory)
+	return mkdirAllNoSymlinks(directory, tenantRoot)
 }
 
-func mkdirAllNoSymlinks(directory string) error {
+func mkdirAllNoSymlinks(directory string, restrictedRoot string) error {
 	directory = filepath.Clean(directory)
+	restrictedRoot = filepath.Clean(restrictedRoot)
 	if !filepath.IsAbs(directory) {
 		return fmt.Errorf("deployment directory %q must be absolute", directory)
 	}
@@ -866,8 +867,18 @@ func mkdirAllNoSymlinks(directory string) error {
 		if !info.IsDir() {
 			return fmt.Errorf("deployment directory %q uses non-directory path component %q", directory, current)
 		}
+		if pathWithinRoot(restrictedRoot, current) && info.Mode().Perm()&0o002 != 0 {
+			return fmt.Errorf("deployment directory %q uses world-writable tenant path component %q", directory, current)
+		}
 	}
 	return nil
+}
+
+func pathWithinRoot(root string, path string) bool {
+	root = filepath.Clean(root)
+	path = filepath.Clean(path)
+	relative, err := filepath.Rel(root, path)
+	return err == nil && (relative == "." || (relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator))))
 }
 
 func cleanupFailedDeployment(ctx context.Context, plan DeploymentPlan) error {
