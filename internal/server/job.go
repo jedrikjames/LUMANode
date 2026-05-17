@@ -612,7 +612,7 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 			},
 		},
 		Firewall:        firewall,
-		ContainerRemove: CommandPlan{Name: "docker", Args: []string{"rm", "--force", "luma-" + job.DeploymentID}},
+		ContainerRemove: CommandPlan{Name: "docker", Args: []string{"rm", "--force", "--volumes", "luma-" + job.DeploymentID}},
 		ContainerRun:    CommandPlan{Name: "docker", Args: runArgs},
 	}
 	plan.Commands = append([]CommandPlan{plan.NetworkInspect, plan.NetworkCreate}, firewall...)

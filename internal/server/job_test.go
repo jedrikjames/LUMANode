@@ -249,7 +249,7 @@ func TestDeploymentPlanIncludesPreflightSteps(t *testing.T) {
 	if portRule.SkipIfRuleComment != "luma:dep_test:8080/tcp" {
 		t.Fatalf("expected duplicate guard comment, got %q", portRule.SkipIfRuleComment)
 	}
-	if !slices.Equal(plan.ContainerRemove.Args, []string{"rm", "--force", "luma-dep_test"}) {
+	if !slices.Equal(plan.ContainerRemove.Args, []string{"rm", "--force", "--volumes", "luma-dep_test"}) {
 		t.Fatalf("expected managed container replacement command, got %#v", plan.ContainerRemove)
 	}
 	if len(plan.Commands) != 13 || !slices.Equal(plan.Commands[len(plan.Commands)-2].Args, plan.ContainerRemove.Args) || plan.Commands[len(plan.Commands)-1].Args[0] != "run" {
@@ -1458,7 +1458,7 @@ exit 0
 	t.Setenv("DOCKER_LOG", logFile)
 
 	t.Setenv("DOCKER_LABEL_OUTPUT", "false dep_test")
-	err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "luma-dep_test"}})
+	err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "--volumes", "luma-dep_test"}})
 	if err == nil || !strings.Contains(err.Error(), "unmanaged container") {
 		t.Fatalf("expected unmanaged container refusal, got %v", err)
 	}
@@ -1467,14 +1467,14 @@ exit 0
 	}
 
 	t.Setenv("DOCKER_LABEL_OUTPUT", "true dep_test")
-	if err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "luma-dep_test"}}); err != nil {
+	if err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "--volumes", "luma-dep_test"}}); err != nil {
 		t.Fatalf("expected managed container removal to pass, got %v", err)
 	}
 	content, err := os.ReadFile(logFile)
 	if err != nil {
 		t.Fatalf("read docker log: %v", err)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected docker rm to run for managed container, got %q", string(content))
 	}
 }
@@ -1641,7 +1641,7 @@ exit 0
 	if !strings.Contains(log, "run ") {
 		t.Fatalf("expected docker run to execute, got %q", log)
 	}
-	if !strings.Contains(log, "rm --force luma-dep_test") {
+	if !strings.Contains(log, "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected failed egress hardening to remove started container, got %q", log)
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -1813,7 +1813,7 @@ exit 0
 	if !strings.Contains(log, "run ") {
 		t.Fatalf("expected docker run to execute, got %q", log)
 	}
-	if !strings.Contains(log, "rm --force luma-dep_test") {
+	if !strings.Contains(log, "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected unhealthy container cleanup, got %q", log)
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -1900,7 +1900,7 @@ exit 0
 		t.Fatalf("read docker log: %v", readErr)
 	}
 	log := string(content)
-	if !strings.Contains(log, "rm --force luma-dep_test") {
+	if !strings.Contains(log, "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected starting container cleanup, got %q", log)
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -1978,7 +1978,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected mismatched ownership cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2056,7 +2056,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected isolation drift cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2134,7 +2134,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected unexpected network cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2212,7 +2212,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected mount drift cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2290,7 +2290,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected security profile drift cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2374,7 +2374,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected image digest drift cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
@@ -2452,7 +2452,7 @@ exit 0
 	if readErr != nil {
 		t.Fatalf("read docker log: %v", readErr)
 	}
-	if !strings.Contains(string(content), "rm --force luma-dep_test") {
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
 		t.Fatalf("expected resource drift cleanup, got %q", string(content))
 	}
 	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
