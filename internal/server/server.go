@@ -18,9 +18,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/lumapanel/lumanode/internal/config"
@@ -50,6 +52,12 @@ type RuntimeStatus struct {
 	Nftables       bool              `json:"nftables"`
 	CgroupV2       bool              `json:"cgroupV2"`
 	Errors         map[string]string `json:"errors,omitempty"`
+}
+
+type hostCapacity struct {
+	CPUCores float64
+	MemoryMB int
+	DiskGB   int
 }
 
 type certificateRotationRequest struct {
@@ -648,6 +656,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 }
 
 func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
+	capacity, err := readHostCapacity(plan.TenantRoot)
+	if err != nil {
+		return err
+	}
+	if err := validateHostCapacity(plan, capacity); err != nil {
+		return err
+	}
 	if err := ensureDeploymentDirectories(plan); err != nil {
 		return err
 	}
@@ -686,6 +701,84 @@ func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
 		return err
 	}
 	return nil
+}
+
+func readHostCapacity(tenantRoot string) (hostCapacity, error) {
+	memoryMB, err := readAvailableMemoryMB("/proc/meminfo")
+	if err != nil {
+		return hostCapacity{}, err
+	}
+	diskGB, err := readAvailableDiskGB(tenantRoot)
+	if err != nil {
+		return hostCapacity{}, err
+	}
+	return hostCapacity{
+		CPUCores: float64(runtime.NumCPU()),
+		MemoryMB: memoryMB,
+		DiskGB:   diskGB,
+	}, nil
+}
+
+func validateHostCapacity(plan DeploymentPlan, capacity hostCapacity) error {
+	if capacity.CPUCores <= 0 || capacity.MemoryMB <= 0 || capacity.DiskGB <= 0 {
+		return fmt.Errorf("host capacity preflight returned invalid capacity")
+	}
+	if plan.Resources.CPUCores > capacity.CPUCores {
+		return fmt.Errorf("deployment requires %.2f CPU cores but host has %.2f available cores", plan.Resources.CPUCores, capacity.CPUCores)
+	}
+	if plan.Resources.MemoryMB > capacity.MemoryMB {
+		return fmt.Errorf("deployment requires %d MiB memory but host has %d MiB available", plan.Resources.MemoryMB, capacity.MemoryMB)
+	}
+	if plan.Resources.DiskGB > capacity.DiskGB {
+		return fmt.Errorf("deployment requires %d GiB writable disk but host has %d GiB available", plan.Resources.DiskGB, capacity.DiskGB)
+	}
+	return nil
+}
+
+func readAvailableMemoryMB(meminfoPath string) (int, error) {
+	content, err := os.ReadFile(meminfoPath)
+	if err != nil {
+		return 0, fmt.Errorf("host memory preflight failed: %w", err)
+	}
+	for _, line := range strings.Split(string(content), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 || fields[0] != "MemAvailable:" {
+			continue
+		}
+		kib, err := strconv.ParseUint(fields[1], 10, 64)
+		if err != nil {
+			return 0, fmt.Errorf("host memory preflight returned invalid MemAvailable value")
+		}
+		return int(kib / 1024), nil
+	}
+	return 0, fmt.Errorf("host memory preflight could not find MemAvailable")
+}
+
+func readAvailableDiskGB(path string) (int, error) {
+	target := nearestExistingPath(path)
+	var stat syscall.Statfs_t
+	if err := syscall.Statfs(target, &stat); err != nil {
+		return 0, fmt.Errorf("host disk preflight failed for %q: %w", target, err)
+	}
+	availableBytes := stat.Bavail * uint64(stat.Bsize)
+	return int(availableBytes / 1024 / 1024 / 1024), nil
+}
+
+func nearestExistingPath(path string) string {
+	if strings.TrimSpace(path) == "" {
+		return string(filepath.Separator)
+	}
+	current := filepath.Clean(path)
+	for {
+		if _, err := os.Stat(current); err == nil {
+			return current
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return string(filepath.Separator)
+		}
+		current = parent
+	}
 }
 
 func ensureDeploymentDirectories(plan DeploymentPlan) error {

@@ -253,6 +253,63 @@ func TestDeploymentPlanIncludesPreflightSteps(t *testing.T) {
 	}
 }
 
+func TestHostCapacityPreflightAcceptsSufficientCapacity(t *testing.T) {
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	capacity := hostCapacity{CPUCores: 2, MemoryMB: 1024, DiskGB: 10}
+	if err := validateHostCapacity(plan, capacity); err != nil {
+		t.Fatalf("expected sufficient host capacity to pass, got %v", err)
+	}
+}
+
+func TestHostCapacityPreflightRejectsOvercommit(t *testing.T) {
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	cases := []struct {
+		name     string
+		capacity hostCapacity
+		contains string
+	}{
+		{name: "cpu", capacity: hostCapacity{CPUCores: 1, MemoryMB: 1024, DiskGB: 10}, contains: "CPU cores"},
+		{name: "memory", capacity: hostCapacity{CPUCores: 2, MemoryMB: 256, DiskGB: 10}, contains: "memory"},
+		{name: "disk", capacity: hostCapacity{CPUCores: 2, MemoryMB: 1024, DiskGB: 1}, contains: "writable disk"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateHostCapacity(plan, tt.capacity)
+			if err == nil || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected %q capacity error, got %v", tt.contains, err)
+			}
+		})
+	}
+}
+
+func TestHostCapacityPreflightReadsMemAvailable(t *testing.T) {
+	meminfo := filepath.Join(t.TempDir(), "meminfo")
+	if err := os.WriteFile(meminfo, []byte("MemTotal: 4096000 kB\nMemAvailable: 1048576 kB\n"), 0o600); err != nil {
+		t.Fatalf("failed to write meminfo fixture: %v", err)
+	}
+	memoryMB, err := readAvailableMemoryMB(meminfo)
+	if err != nil {
+		t.Fatalf("readAvailableMemoryMB returned error: %v", err)
+	}
+	if memoryMB != 1024 {
+		t.Fatalf("expected 1024 MiB available memory, got %d", memoryMB)
+	}
+}
+
+func TestHostCapacityPreflightFindsNearestExistingPath(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "tenants", "tenant_demo", "deployments", "dep_test")
+	if got := nearestExistingPath(path); got != root {
+		t.Fatalf("expected nearest existing path %q, got %q", root, got)
+	}
+}
+
 func TestEnsureTenantDirectoryCreatesNestedTenantPath(t *testing.T) {
 	tenantRoot := filepath.Join(t.TempDir(), "tenant_demo")
 	target := filepath.Join(tenantRoot, "deployments", "dep_test", "data")
