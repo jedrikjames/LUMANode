@@ -1152,7 +1152,7 @@ func TestRuntimeStatusRequiresDockerNftAndCgroupV2(t *testing.T) {
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "info" ]; then
   if [ "$3" = "{{json .SecurityOptions}}" ]; then
-    echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns"]'
+    echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
     exit 0
   fi
   echo 2
@@ -1169,8 +1169,8 @@ exit 0
 	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
-	if !status.DockerSeccomp || !status.DockerAppArmor {
-		t.Fatalf("expected Docker seccomp/AppArmor readiness, got %#v", status)
+	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
+		t.Fatalf("expected Docker seccomp/AppArmor/userns readiness, got %#v", status)
 	}
 }
 
@@ -1200,10 +1200,10 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor {
-		t.Fatalf("expected missing Docker seccomp/AppArmor support, got %#v", status)
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace {
+		t.Fatalf("expected missing Docker seccomp/AppArmor/userns support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
 	}
 }

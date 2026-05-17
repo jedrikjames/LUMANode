@@ -45,14 +45,15 @@ type Metrics struct {
 }
 
 type RuntimeStatus struct {
-	Ready          bool              `json:"ready"`
-	Docker         bool              `json:"docker"`
-	DockerCgroupV2 bool              `json:"dockerCgroupV2"`
-	DockerSeccomp  bool              `json:"dockerSeccomp"`
-	DockerAppArmor bool              `json:"dockerAppArmor"`
-	Nftables       bool              `json:"nftables"`
-	CgroupV2       bool              `json:"cgroupV2"`
-	Errors         map[string]string `json:"errors,omitempty"`
+	Ready               bool              `json:"ready"`
+	Docker              bool              `json:"docker"`
+	DockerCgroupV2      bool              `json:"dockerCgroupV2"`
+	DockerSeccomp       bool              `json:"dockerSeccomp"`
+	DockerAppArmor      bool              `json:"dockerAppArmor"`
+	DockerUserNamespace bool              `json:"dockerUserNamespace"`
+	Nftables            bool              `json:"nftables"`
+	CgroupV2            bool              `json:"cgroupV2"`
+	Errors              map[string]string `json:"errors,omitempty"`
 }
 
 type hostCapacity struct {
@@ -631,6 +632,11 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			} else {
 				status.Errors["dockerAppArmor"] = "docker daemon does not advertise AppArmor support"
 			}
+			if strings.Contains(securityOptions, "userns") || strings.Contains(securityOptions, "rootless") {
+				status.DockerUserNamespace = true
+			} else {
+				status.Errors["dockerUserNamespace"] = "docker daemon does not advertise user namespace or rootless isolation"
+			}
 		}
 	}
 	if _, err := exec.LookPath("nft"); err != nil {
@@ -649,7 +655,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
