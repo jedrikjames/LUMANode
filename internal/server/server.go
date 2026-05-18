@@ -1388,14 +1388,14 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container isolation inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 14 {
+	if len(fields) < 15 {
 		return fmt.Errorf("docker container %q isolation inspect returned incomplete data", plan.ContainerName)
 	}
 	if fields[0] != "false" {
@@ -1419,25 +1419,28 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if fields[7] != strconv.Itoa(defaultContainerStopTimeoutSeconds) {
 		return fmt.Errorf("docker container %q did not keep expected stop timeout", plan.ContainerName)
 	}
-	if fields[8] != networkName {
-		return fmt.Errorf("docker container %q attached to unexpected network %q", plan.ContainerName, fields[8])
+	if fields[8] != "false" {
+		return fmt.Errorf("docker container %q did not keep automatic removal disabled", plan.ContainerName)
 	}
-	networkCount, err := strconv.Atoi(fields[12])
+	if fields[9] != networkName {
+		return fmt.Errorf("docker container %q attached to unexpected network %q", plan.ContainerName, fields[9])
+	}
+	networkCount, err := strconv.Atoi(fields[13])
 	if err != nil || networkCount != 1 {
 		return fmt.Errorf("docker container %q has unexpected network attachment count", plan.ContainerName)
 	}
-	attachedNetworks := strings.Split(fields[13], ",")
+	attachedNetworks := strings.Split(fields[14], ",")
 	if !containsNetworkName(attachedNetworks, networkName) {
 		return fmt.Errorf("docker container %q is missing expected tenant network attachment", plan.ContainerName)
 	}
-	if fields[9] != defaultContainerUser {
+	if fields[10] != defaultContainerUser {
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
 	}
-	capDrops := strings.Split(fields[10], ",")
+	capDrops := strings.Split(fields[11], ",")
 	if !containsCapability(capDrops, "ALL") {
 		return fmt.Errorf("docker container %q did not keep drop-all capability policy", plan.ContainerName)
 	}
-	securityOpts := strings.Split(fields[11], ",")
+	securityOpts := strings.Split(fields[12], ",")
 	if !containsSecurityOpt(securityOpts, "no-new-privileges=true") ||
 		!containsSecurityOpt(securityOpts, "seccomp="+plan.SeccompProfile) ||
 		!containsSecurityOpt(securityOpts, "apparmor="+plan.AppArmorProfile) {
