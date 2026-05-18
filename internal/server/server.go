@@ -1469,8 +1469,8 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
 	}
 	capDrops := strings.Split(fields[16], ",")
-	if !containsCapability(capDrops, "ALL") {
-		return fmt.Errorf("docker container %q did not keep drop-all capability policy", plan.ContainerName)
+	if !exactDroppedCapabilities(capDrops) {
+		return fmt.Errorf("docker container %q did not keep exact drop-all capability policy", plan.ContainerName)
 	}
 	securityOpts := strings.Split(fields[17], ",")
 	if !containsSecurityOpt(securityOpts, "no-new-privileges=true") ||
@@ -1514,6 +1514,18 @@ func containsNetworkName(networks []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func exactDroppedCapabilities(capabilities []string) bool {
+	filtered := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		capability = strings.TrimSpace(capability)
+		if capability == "" {
+			continue
+		}
+		filtered = append(filtered, capability)
+	}
+	return len(filtered) == 1 && filtered[0] == "ALL"
 }
 
 func containsSecurityOpt(options []string, target string) bool {

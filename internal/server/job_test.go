@@ -2821,6 +2821,27 @@ func TestVerifyStartedContainerIsolationRequiresPrivatePidAndUTSNamespaces(t *te
 	}
 }
 
+func TestVerifyStartedContainerIsolationRequiresExactCapabilityDropPolicy(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL,NET_RAW, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	err = verifyStartedContainerIsolation(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "exact drop-all capability") {
+		t.Fatalf("expected exact capability-drop verification failure, got %v", err)
+	}
+}
+
 func TestVerifyStartedContainerIsolationRequiresStopTimeout(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
