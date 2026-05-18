@@ -2155,7 +2155,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2247,7 +2247,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2336,7 +2336,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true unhealthy true dep_test tenant_demo"
+      echo "true unhealthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2426,7 +2426,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true starting true dep_test tenant_demo"
+      echo "true starting true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2505,7 +2505,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_other tenant_demo"
+      echo "true healthy true dep_other tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2556,6 +2556,26 @@ exit 0
 	}
 }
 
+func TestWaitForStartedContainerHealthyRejectsNodeLabelDrift(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "true healthy true dep_test tenant_demo node_other"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = waitForStartedContainerHealthy(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "ownership labels") {
+		t.Fatalf("expected node ownership label verification failure, got %v", err)
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithIsolationDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
@@ -2583,7 +2603,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2661,7 +2681,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2739,7 +2759,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2837,7 +2857,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2919,7 +2939,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)
@@ -2999,7 +3019,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true healthy true dep_test tenant_demo"
+      echo "true healthy true dep_test tenant_demo node_local"
       exit 0
       ;;
     *luma.managed*)

@@ -104,6 +104,7 @@ type CommandPlan struct {
 type DeploymentPlan struct {
 	DeploymentID    string        `json:"deploymentId"`
 	TenantID        string        `json:"tenantId"`
+	NodeID          string        `json:"nodeId"`
 	TenantRoot      string        `json:"tenantRoot"`
 	ContainerName   string        `json:"containerName"`
 	Resources       ResourcePlan  `json:"resources"`
@@ -640,6 +641,7 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 	plan := DeploymentPlan{
 		DeploymentID:  job.DeploymentID,
 		TenantID:      job.TenantID,
+		NodeID:        job.NodeID,
 		TenantRoot:    filepath.Clean(filepath.Join("/srv/lumapanel/tenants", job.TenantID)),
 		ContainerName: "luma-" + job.DeploymentID,
 		Resources: ResourcePlan{
