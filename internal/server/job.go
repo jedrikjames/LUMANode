@@ -551,6 +551,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--cgroupns", "private",
 		"--stop-timeout", strconv.Itoa(defaultContainerStopTimeoutSeconds),
 		"--restart", "no",
+		"--oom-kill-disable=false",
 		"--pull", "never",
 		"--network", job.Network.Name,
 		"--security-opt", "no-new-privileges=true",
