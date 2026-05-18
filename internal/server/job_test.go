@@ -2842,6 +2842,27 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerIsolationRequiresExactSecurityOptions(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant,label=disable, 1 luma-tenant_demo, none none none none none none none none none"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	err = verifyStartedContainerIsolation(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "exact security options") {
+		t.Fatalf("expected exact security option verification failure, got %v", err)
+	}
+}
+
 func TestVerifyStartedContainerIsolationRequiresStopTimeout(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -3318,7 +3339,7 @@ exit 0
 	}
 	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
-	if err == nil || !strings.Contains(err.Error(), "expected security options") {
+	if err == nil || !strings.Contains(err.Error(), "exact security options") {
 		t.Fatalf("expected security profile drift verification failure, got %v", err)
 	}
 	content, readErr := os.ReadFile(logFile)

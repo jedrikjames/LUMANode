@@ -1473,10 +1473,13 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		return fmt.Errorf("docker container %q did not keep exact drop-all capability policy", plan.ContainerName)
 	}
 	securityOpts := strings.Split(fields[17], ",")
-	if !containsSecurityOpt(securityOpts, "no-new-privileges=true") ||
-		!containsSecurityOpt(securityOpts, "seccomp="+plan.SeccompProfile) ||
-		!containsSecurityOpt(securityOpts, "apparmor="+plan.AppArmorProfile) {
-		return fmt.Errorf("docker container %q did not keep expected security options", plan.ContainerName)
+	expectedSecurityOpts := []string{
+		"no-new-privileges=true",
+		"seccomp=" + plan.SeccompProfile,
+		"apparmor=" + plan.AppArmorProfile,
+	}
+	if !exactSecurityOptions(securityOpts, expectedSecurityOpts) {
+		return fmt.Errorf("docker container %q did not keep exact security options", plan.ContainerName)
 	}
 	return nil
 }
@@ -1528,13 +1531,24 @@ func exactDroppedCapabilities(capabilities []string) bool {
 	return len(filtered) == 1 && filtered[0] == "ALL"
 }
 
-func containsSecurityOpt(options []string, target string) bool {
+func exactSecurityOptions(options []string, expected []string) bool {
+	actualSet := map[string]bool{}
 	for _, option := range options {
-		if strings.TrimSpace(option) == target {
-			return true
+		option = strings.TrimSpace(option)
+		if option == "" {
+			continue
+		}
+		actualSet[option] = true
+	}
+	if len(actualSet) != len(expected) {
+		return false
+	}
+	for _, option := range expected {
+		if !actualSet[option] {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 type dockerMountInspect struct {
