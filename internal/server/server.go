@@ -67,6 +67,7 @@ type RuntimeStatus struct {
 	DockerSocketProtected        bool              `json:"dockerSocketProtected"`
 	Nftables                     bool              `json:"nftables"`
 	CgroupV2                     bool              `json:"cgroupV2"`
+	CgroupControllersReady       bool              `json:"cgroupControllersReady"`
 	Errors                       map[string]string `json:"errors,omitempty"`
 }
 
@@ -829,12 +830,32 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		status.Errors["cgroupV2"] = "cgroup controllers file is empty"
 	} else {
 		status.CgroupV2 = true
+		if missing := missingRequiredCgroupControllers(string(content)); len(missing) == 0 {
+			status.CgroupControllersReady = true
+		} else {
+			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
+		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
 	return status
+}
+
+func missingRequiredCgroupControllers(content string) []string {
+	available := map[string]bool{}
+	for _, controller := range strings.Fields(content) {
+		available[controller] = true
+	}
+	required := []string{"cpu", "memory", "pids"}
+	var missing []string
+	for _, controller := range required {
+		if !available[controller] {
+			missing = append(missing, controller)
+		}
+	}
+	return missing
 }
 
 func dockerEndpoint(ctx context.Context) (string, error) {

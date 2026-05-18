@@ -1261,7 +1261,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1531,6 +1531,86 @@ exit 0
 	}
 }
 
+func TestRuntimeStatusRequiresCgroupControllers(t *testing.T) {
+	tempDir := t.TempDir()
+	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory\n"), 0o600); err != nil {
+		t.Fatalf("write cgroup controllers: %v", err)
+	}
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "info" ]; then
+  if [ "$3" = "{{json .SecurityOptions}}" ]; then
+    echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
+    exit 0
+  fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo systemd
+    exit 0
+  fi
+  if [ "$3" = "{{.Debug}}" ]; then
+    echo false
+    exit 0
+  fi
+  if [ "$3" = "{{.Swarm.LocalNodeState}}" ]; then
+    echo inactive
+    exit 0
+  fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo false
+    exit 0
+  fi
+  if [ "$3" = "{{.BridgeNfIptables}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.BridgeNfIp6tables}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
+  if [ "$3" = "{{.Driver}}" ]; then
+    echo overlay2
+    exit 0
+  fi
+  if [ "$3" = "{{json .DriverStatus}}" ]; then
+    echo '[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]'
+    exit 0
+  fi
+  echo 2
+  exit 0
+fi
+if [ "$1" = "version" ]; then
+  if [ "$3" = "{{.Server.Experimental}}" ]; then
+    echo false
+    exit 0
+  fi
+  echo 25.0.3
+  exit 0
+fi
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", "#!/bin/sh\nexit 0\n")
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_ROOT_DIR", tempDir)
+
+	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
+	status := agent.runtimeStatus(context.Background())
+	if status.Ready || !status.CgroupV2 || status.CgroupControllersReady {
+		t.Fatalf("expected missing cgroup controllers to fail runtime readiness, got %#v", status)
+	}
+	if status.Errors["cgroupControllers"] == "" || !strings.Contains(status.Errors["cgroupControllers"], "pids") {
+		t.Fatalf("expected missing pids cgroup controller error, got %#v", status.Errors)
+	}
+}
+
 func TestRuntimeStatusRequiresDockerSecurityOptions(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
@@ -1607,6 +1687,16 @@ exit 0
 	}
 	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerOomKill"] == "" || status.Errors["dockerBridgeNfIptables"] == "" || status.Errors["dockerBridgeNfIp6tables"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
+	}
+}
+
+func TestMissingRequiredCgroupControllers(t *testing.T) {
+	if missing := missingRequiredCgroupControllers("cpu memory pids io"); len(missing) != 0 {
+		t.Fatalf("expected all required controllers to pass, got %v", missing)
+	}
+	missing := missingRequiredCgroupControllers("memory")
+	if strings.Join(missing, ",") != "cpu,pids" {
+		t.Fatalf("expected missing cpu,pids, got %v", missing)
 	}
 }
 
