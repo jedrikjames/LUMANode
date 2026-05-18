@@ -278,8 +278,8 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 	if !job.Security.ReadOnlyRootFS {
 		return fmt.Errorf("deployment job must set read-only root filesystem")
 	}
-	if !containsCapability(job.Security.DroppedCapabilities, "ALL") {
-		return fmt.Errorf("deployment job must drop all Linux capabilities")
+	if len(job.Security.DroppedCapabilities) != 1 || !containsCapability(job.Security.DroppedCapabilities, "ALL") {
+		return fmt.Errorf("deployment job must drop only all Linux capabilities")
 	}
 	if !validConfinementProfile(job.Security.SeccompProfile) || !validConfinementProfile(job.Security.AppArmorProfile) {
 		return fmt.Errorf("deployment job must set seccomp and AppArmor profiles")

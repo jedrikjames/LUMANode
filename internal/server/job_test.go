@@ -821,7 +821,12 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 		{
 			name: "does not drop all capabilities",
 			edit: func(job *DeployJob) { job.Security.DroppedCapabilities = []string{"NET_RAW"} },
-			want: "drop all Linux capabilities",
+			want: "drop only all Linux capabilities",
+		},
+		{
+			name: "extra capability drops",
+			edit: func(job *DeployJob) { job.Security.DroppedCapabilities = []string{"ALL", "NET_RAW"} },
+			want: "drop only all Linux capabilities",
 		},
 		{
 			name: "unconfined seccomp",
