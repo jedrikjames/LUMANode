@@ -513,6 +513,9 @@ func validImageReference(image string) bool {
 	if image == "" || len(image) > 512 || strings.ContainsAny(image, "\x00\r\n\t ") {
 		return false
 	}
+	if strings.HasPrefix(image, "-") || strings.Contains(image, "://") {
+		return false
+	}
 	for _, r := range image {
 		if r < 0x21 || r > 0x7e {
 			return false
