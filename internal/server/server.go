@@ -52,6 +52,7 @@ type RuntimeStatus struct {
 	DockerDebugDisabled          bool              `json:"dockerDebugDisabled"`
 	DockerExperimentalDisabled   bool              `json:"dockerExperimentalDisabled"`
 	DockerSwarmInactive          bool              `json:"dockerSwarmInactive"`
+	DockerOomKillEnabled         bool              `json:"dockerOomKillEnabled"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -680,6 +681,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerSwarm"] = "docker swarm mode must be inactive"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.OomKillDisable}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerOomKill"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerOomKill"] == "" {
+				status.Errors["dockerOomKill"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "false") {
+			status.DockerOomKillEnabled = true
+		} else {
+			status.Errors["dockerOomKill"] = "docker daemon OOM kill disable must be false"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -780,7 +792,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}

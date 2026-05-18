@@ -1213,6 +1213,10 @@ if [ "$1" = "info" ]; then
     echo inactive
     exit 0
   fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo false
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo true
     exit 0
@@ -1244,7 +1248,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1274,6 +1278,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.Swarm.LocalNodeState}}" ]; then
     echo inactive
+    exit 0
+  fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo false
     exit 0
   fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
@@ -1349,6 +1357,10 @@ if [ "$1" = "info" ]; then
     echo inactive
     exit 0
   fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo false
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo true
     exit 0
@@ -1417,6 +1429,10 @@ if [ "$1" = "info" ]; then
     echo active
     exit 0
   fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo true
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo false
     exit 0
@@ -1447,10 +1463,10 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerOomKillEnabled || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
 		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerOomKill"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
 	}
 }
