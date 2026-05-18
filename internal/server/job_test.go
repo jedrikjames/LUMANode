@@ -864,6 +864,14 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid egress mode",
 		},
 		{
+			name: "deny all with egress rules",
+			edit: func(job *DeployJob) {
+				job.Egress.Mode = "deny-all"
+				job.Egress.Rules = []EgressPolicyRule{{Protocol: "tcp", DestinationCIDR: "10.0.0.1/32", Port: 443}}
+			},
+			want: "deny-all egress policy cannot include rules",
+		},
+		{
 			name: "invalid egress cidr",
 			edit: func(job *DeployJob) {
 				job.Egress.Mode = "restricted"

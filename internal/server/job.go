@@ -371,6 +371,9 @@ func validateEgressPolicy(job DeployJob) error {
 	if mode == "allow-all" && len(job.Egress.Rules) > 0 {
 		return fmt.Errorf("allow-all egress policy cannot include rules")
 	}
+	if mode == "deny-all" && len(job.Egress.Rules) > 0 {
+		return fmt.Errorf("deny-all egress policy cannot include rules")
+	}
 	if mode == "restricted" && len(job.Egress.Rules) == 0 {
 		return fmt.Errorf("restricted egress policy requires allow rules")
 	}
