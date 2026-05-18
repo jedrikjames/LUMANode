@@ -25,6 +25,8 @@ const defaultContainerHealthInterval = "30s"
 const defaultContainerHealthTimeout = "5s"
 const defaultContainerHealthRetries = 3
 const defaultContainerTmpfsSize = "64m"
+const defaultContainerShmSize = "64m"
+const defaultContainerShmBytes = 64 * 1024 * 1024
 const defaultContainerLogMaxSize = "10m"
 const defaultContainerLogMaxFile = "3"
 const maxContainerCPUCores = 128
@@ -575,6 +577,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--memory-swap", memoryLimit,
 		"--storage-opt", "size=" + diskLimit,
 		"--pids-limit", strconv.Itoa(defaultContainerPidsLimit),
+		"--shm-size", defaultContainerShmSize,
 		"--log-driver", "json-file",
 		"--log-opt", "max-size=" + defaultContainerLogMaxSize,
 		"--log-opt", "max-file=" + defaultContainerLogMaxFile,

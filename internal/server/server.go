@@ -1622,14 +1622,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container resource inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 7 {
+	if len(fields) < 8 {
 		return fmt.Errorf("docker container %q resource inspect returned incomplete data", plan.ContainerName)
 	}
 	expectedNanoCpus := int64(math.Round(plan.Resources.CPUCores * 1_000_000_000))
@@ -1647,7 +1647,11 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if fields[3] != expectedDiskLimit {
 		return fmt.Errorf("docker container %q did not keep expected writable layer size", plan.ContainerName)
 	}
-	if fields[4] != "json-file" || fields[5] != defaultContainerLogMaxSize || fields[6] != defaultContainerLogMaxFile {
+	shmBytes, shmErr := strconv.ParseInt(fields[4], 10, 64)
+	if shmErr != nil || shmBytes != defaultContainerShmBytes {
+		return fmt.Errorf("docker container %q did not keep expected shared memory size", plan.ContainerName)
+	}
+	if fields[5] != "json-file" || fields[6] != defaultContainerLogMaxSize || fields[7] != defaultContainerLogMaxFile {
 		return fmt.Errorf("docker container %q did not keep expected log rotation settings", plan.ContainerName)
 	}
 	return nil
