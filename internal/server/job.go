@@ -323,8 +323,18 @@ func validDockerLabel(key string, value string) bool {
 	if key == "" || len(key) > 253 || len(value) > 1024 {
 		return false
 	}
-	if strings.ContainsAny(key, "\x00\r\n=") || strings.ContainsAny(value, "\x00\r\n") {
+	if strings.Contains(key, "=") {
 		return false
+	}
+	for _, r := range key {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	for _, r := range value {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
 	}
 	return true
 }

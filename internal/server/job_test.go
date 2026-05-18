@@ -854,6 +854,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid Docker label",
 		},
 		{
+			name: "docker label value with control character",
+			edit: func(job *DeployJob) { job.Labels["safe.label"] = "value\twith-tab" },
+			want: "invalid Docker label",
+		},
+		{
 			name: "invalid egress mode",
 			edit: func(job *DeployJob) { job.Egress.Mode = "internet" },
 			want: "invalid egress mode",
