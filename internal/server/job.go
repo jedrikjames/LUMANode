@@ -658,12 +658,8 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		value := job.Env[key]
 		args = append(args, "--env", key+"="+value)
 	}
-	for _, port := range job.Ports {
-		protocol := port.Protocol
-		if protocol == "" {
-			protocol = "tcp"
-		}
-		args = append(args, "--publish", fmt.Sprintf("%d:%d/%s", port.HostPort, port.ContainerPort, protocol))
+	for _, port := range normalizedPortPlans(job) {
+		args = append(args, "--publish", fmt.Sprintf("%d:%d/%s", port.HostPort, port.ContainerPort, port.Protocol))
 	}
 	for _, mount := range job.Mounts {
 		mode := "rw"
@@ -694,19 +690,12 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 	}
 	directorySet := map[string]struct{}{}
 	mounts := make([]MountPlan, 0, len(job.Mounts))
-	ports := make([]PortPlan, 0, len(job.Ports))
+	ports := normalizedPortPlans(job)
 	for _, mount := range job.Mounts {
 		source := filepath.Clean(mount.Source)
 		target := filepath.Clean(mount.Target)
 		directorySet[source] = struct{}{}
 		mounts = append(mounts, MountPlan{Source: source, Target: target, ReadOnly: mount.ReadOnly})
-	}
-	for _, port := range job.Ports {
-		protocol := port.Protocol
-		if protocol == "" {
-			protocol = "tcp"
-		}
-		ports = append(ports, PortPlan{HostPort: port.HostPort, ContainerPort: port.ContainerPort, Protocol: protocol})
 	}
 	directories := make([]string, 0, len(directorySet))
 	for directory := range directorySet {
@@ -778,23 +767,14 @@ func firewallCommands(job DeployJob) []CommandPlan {
 		},
 	}
 	commands = append(commands, baseFirewallCommands()...)
-	portRules := map[string]struct{}{}
-	for _, port := range job.Ports {
-		protocol := port.Protocol
-		if protocol == "" {
-			protocol = "tcp"
-		}
-		comment := fmt.Sprintf("luma:%s:%d/%s", job.DeploymentID, port.HostPort, protocol)
-		if _, exists := portRules[comment]; exists {
-			continue
-		}
-		portRules[comment] = struct{}{}
+	for _, port := range normalizedPortPlans(job) {
+		comment := fmt.Sprintf("luma:%s:%d/%s", job.DeploymentID, port.HostPort, port.Protocol)
 		commands = append(commands, CommandPlan{
 			Name:              "nft",
 			SkipIfRuleComment: comment,
 			Args: []string{
 				"add", "rule", "inet", "lumapanel", "input",
-				protocol, "dport", strconv.Itoa(port.HostPort),
+				port.Protocol, "dport", strconv.Itoa(port.HostPort),
 				"counter", "accept",
 				"comment", comment,
 			},
@@ -834,7 +814,7 @@ func egressFirewallCommands(job DeployJob, containerIP string) ([]CommandPlan, e
 			},
 		},
 	}
-	for index, rule := range job.Egress.Rules {
+	for index, rule := range normalizedEgressRules(job) {
 		comment := fmt.Sprintf("luma:%s:egress:%03d", job.DeploymentID, index+1)
 		commands = append(commands, CommandPlan{
 			Name:              "nft",
@@ -861,6 +841,51 @@ func egressFirewallCommands(job DeployJob, containerIP string) ([]CommandPlan, e
 		},
 	})
 	return commands, nil
+}
+
+func normalizedPortPlans(job DeployJob) []PortPlan {
+	ports := make([]PortPlan, 0, len(job.Ports))
+	seen := map[string]struct{}{}
+	for _, port := range job.Ports {
+		protocol := port.Protocol
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		key := fmt.Sprintf("%d/%s", port.HostPort, protocol)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		ports = append(ports, PortPlan{
+			HostPort:      port.HostPort,
+			ContainerPort: port.ContainerPort,
+			Protocol:      protocol,
+		})
+	}
+	sort.Slice(ports, func(i, j int) bool {
+		if ports[i].Protocol != ports[j].Protocol {
+			return ports[i].Protocol < ports[j].Protocol
+		}
+		if ports[i].HostPort != ports[j].HostPort {
+			return ports[i].HostPort < ports[j].HostPort
+		}
+		return ports[i].ContainerPort < ports[j].ContainerPort
+	})
+	return ports
+}
+
+func normalizedEgressRules(job DeployJob) []EgressPolicyRule {
+	rules := append([]EgressPolicyRule(nil), job.Egress.Rules...)
+	sort.Slice(rules, func(i, j int) bool {
+		if rules[i].Protocol != rules[j].Protocol {
+			return rules[i].Protocol < rules[j].Protocol
+		}
+		if rules[i].DestinationCIDR != rules[j].DestinationCIDR {
+			return rules[i].DestinationCIDR < rules[j].DestinationCIDR
+		}
+		return rules[i].Port < rules[j].Port
+	})
+	return rules
 }
 
 func baseFirewallCommands() []CommandPlan {

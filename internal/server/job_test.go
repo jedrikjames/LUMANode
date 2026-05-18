@@ -230,6 +230,29 @@ func TestDockerRunArgsOrdersUserLabelsAndEnvironment(t *testing.T) {
 	}
 }
 
+func TestDockerRunArgsOrdersPublishedPorts(t *testing.T) {
+	job := sampleJob()
+	job.Ports = []struct {
+		HostPort      int    `json:"hostPort"`
+		ContainerPort int    `json:"containerPort"`
+		Protocol      string `json:"protocol"`
+	}{
+		{HostPort: 9000, ContainerPort: 9000, Protocol: "udp"},
+		{HostPort: 25565, ContainerPort: 25565, Protocol: ""},
+		{HostPort: 8080, ContainerPort: 80, Protocol: "tcp"},
+	}
+	args, err := dockerRunArgs(job)
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	first := slices.Index(args, "8080:80/tcp")
+	second := slices.Index(args, "25565:25565/tcp")
+	third := slices.Index(args, "9000:9000/udp")
+	if first < 0 || second < 0 || third < 0 || first > second || second > third {
+		t.Fatalf("expected published ports to be sorted in docker args, got %#v", args)
+	}
+}
+
 func TestDockerRunArgsRejectsIncompleteJob(t *testing.T) {
 	_, err := dockerRunArgs(DeployJob{})
 	if err == nil {
@@ -478,6 +501,34 @@ func TestFirewallCommandsDeduplicatePublishedPorts(t *testing.T) {
 	}
 }
 
+func TestFirewallCommandsOrdersPublishedPorts(t *testing.T) {
+	job := sampleJob()
+	job.Ports = []struct {
+		HostPort      int    `json:"hostPort"`
+		ContainerPort int    `json:"containerPort"`
+		Protocol      string `json:"protocol"`
+	}{
+		{HostPort: 9000, ContainerPort: 9000, Protocol: "udp"},
+		{HostPort: 25565, ContainerPort: 25565, Protocol: ""},
+		{HostPort: 8080, ContainerPort: 80, Protocol: "tcp"},
+	}
+	firewall := firewallCommands(job)
+	want := []string{
+		"luma:dep_test:8080/tcp",
+		"luma:dep_test:25565/tcp",
+		"luma:dep_test:9000/udp",
+	}
+	got := []string{}
+	for _, command := range firewall {
+		if strings.HasPrefix(command.SkipIfRuleComment, "luma:dep_test:") {
+			got = append(got, command.SkipIfRuleComment)
+		}
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("expected sorted published port firewall comments %#v, got %#v", want, got)
+	}
+}
+
 func TestFirewallCommandsUseDefaultDenyBasePolicy(t *testing.T) {
 	commands := firewallCommands(sampleJob())
 	requiredComments := []string{
@@ -523,6 +574,37 @@ func TestEgressFirewallCommandsRestrictContainerIP(t *testing.T) {
 	drop := commands[len(commands)-1]
 	if !slices.Contains(drop.Args, "drop") || drop.SkipIfRuleComment != "luma:dep_test:egress:drop" {
 		t.Fatalf("expected final egress drop rule, got %#v", drop)
+	}
+}
+
+func TestEgressFirewallCommandsOrdersRules(t *testing.T) {
+	job := sampleJob()
+	job.Egress.Mode = "restricted"
+	job.Egress.Rules = []EgressPolicyRule{
+		{Protocol: "udp", DestinationCIDR: "192.0.2.10/32", Port: 53},
+		{Protocol: "tcp", DestinationCIDR: "192.0.2.20/32", Port: 443},
+		{Protocol: "tcp", DestinationCIDR: "10.20.0.0/16", Port: 80},
+	}
+	commands, err := egressFirewallCommands(job, "172.18.0.4")
+	if err != nil {
+		t.Fatalf("egressFirewallCommands returned error: %v", err)
+	}
+	want := []struct {
+		comment string
+		cidr    string
+		port    string
+	}{
+		{comment: "luma:dep_test:egress:001", cidr: "10.20.0.0/16", port: "80"},
+		{comment: "luma:dep_test:egress:002", cidr: "192.0.2.20/32", port: "443"},
+		{comment: "luma:dep_test:egress:003", cidr: "192.0.2.10/32", port: "53"},
+	}
+	for index, expected := range want {
+		command := commands[index+3]
+		if command.SkipIfRuleComment != expected.comment ||
+			!slices.Contains(command.Args, expected.cidr) ||
+			!slices.Contains(command.Args, expected.port) {
+			t.Fatalf("expected sorted egress command %#v at index %d, got %#v", expected, index, command)
+		}
 	}
 }
 
