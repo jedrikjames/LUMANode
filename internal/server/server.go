@@ -1390,14 +1390,14 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container isolation inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 22 {
+	if len(fields) < 24 {
 		return fmt.Errorf("docker container %q isolation inspect returned incomplete data", plan.ContainerName)
 	}
 	if fields[0] != "false" {
@@ -1449,6 +1449,9 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	}
 	if fields[19] != "none" || fields[20] != "none" || fields[21] != "none" {
 		return fmt.Errorf("docker container %q has unexpected DNS overrides", plan.ContainerName)
+	}
+	if fields[22] != "none" || fields[23] != "none" {
+		return fmt.Errorf("docker container %q has unexpected hostname overrides", plan.ContainerName)
 	}
 	if fields[11] != defaultContainerUser {
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
