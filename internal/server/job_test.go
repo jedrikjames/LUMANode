@@ -2260,6 +2260,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -2352,6 +2356,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -2439,6 +2447,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
     *.State.Running*)
@@ -2531,6 +2543,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true starting true dep_test tenant_demo node_local"
       exit 0
@@ -2610,6 +2626,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_other tenant_demo node_local"
       exit 0
@@ -2682,6 +2702,55 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
+	cases := []struct {
+		name     string
+		output   string
+		contains string
+	}{
+		{
+			name:     "missing",
+			output:   "null",
+			contains: "missing expected healthcheck",
+		},
+		{
+			name:     "command",
+			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.2"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}`,
+			contains: "healthcheck command",
+		},
+		{
+			name:     "interval",
+			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":60000000000,"Timeout":5000000000,"Retries":3}`,
+			contains: "healthcheck timing",
+		},
+		{
+			name:     "timeout",
+			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":10000000000,"Retries":3}`,
+			contains: "healthcheck timing",
+		},
+		{
+			name:     "retries",
+			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":10}`,
+			contains: "healthcheck timing",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", "#!/bin/sh\nif [ \"$1\" = \"inspect\" ]; then\n  echo '"+tt.output+"'\n  exit 0\nfi\nexit 1\n")
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			plan, err := deploymentPlan(sampleJob())
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainerHealthcheck(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected %s verification failure, got %v", tt.contains, err)
+			}
+		})
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithIsolationDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
@@ -2706,6 +2775,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "true true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
     *.State.Running*)
@@ -3267,6 +3340,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 2 luma-tenant_demo,bridge, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -3343,6 +3420,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
     *.State.Running*)
@@ -3443,6 +3524,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -3525,6 +3610,10 @@ if [ "$1" = "inspect" ]; then
       echo "nginx:1.27-alpine"
       exit 0
       ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -3603,6 +3692,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
     *.State.Running*)

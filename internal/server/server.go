@@ -1282,6 +1282,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if plan.Healthcheck == "" {
 		return nil
 	}
+	if err := verifyStartedContainerHealthcheck(ctx, plan); err != nil {
+		return err
+	}
 	return waitForStartedContainerHealthy(ctx, plan)
 }
 
@@ -1376,6 +1379,42 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 	image := strings.TrimSpace(string(output))
 	if image != plan.ResolvedImage {
 		return fmt.Errorf("docker container %q did not keep expected digest-pinned image", plan.ContainerName)
+	}
+	return nil
+}
+
+type dockerHealthcheckConfig struct {
+	Test     []string `json:"Test"`
+	Interval int64    `json:"Interval"`
+	Timeout  int64    `json:"Timeout"`
+	Retries  int      `json:"Retries"`
+}
+
+func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan) error {
+	output, err := exec.CommandContext(
+		ctx,
+		"docker",
+		"inspect",
+		"-f",
+		`{{json .Config.Healthcheck}}`,
+		plan.ContainerName,
+	).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker container healthcheck inspect failed: %w: %s", err, string(output))
+	}
+	trimmed := strings.TrimSpace(string(output))
+	if trimmed == "" || trimmed == "null" {
+		return fmt.Errorf("docker container %q is missing expected healthcheck configuration", plan.ContainerName)
+	}
+	var healthcheck dockerHealthcheckConfig
+	if err := json.Unmarshal([]byte(trimmed), &healthcheck); err != nil {
+		return fmt.Errorf("docker container %q healthcheck inspect returned invalid data: %w", plan.ContainerName, err)
+	}
+	if len(healthcheck.Test) != 2 || healthcheck.Test[0] != "CMD-SHELL" || healthcheck.Test[1] != plan.Healthcheck {
+		return fmt.Errorf("docker container %q did not keep expected healthcheck command", plan.ContainerName)
+	}
+	if healthcheck.Interval != int64(30*time.Second) || healthcheck.Timeout != int64(5*time.Second) || healthcheck.Retries != defaultContainerHealthRetries {
+		return fmt.Errorf("docker container %q did not keep expected healthcheck timing", plan.ContainerName)
 	}
 	return nil
 }
