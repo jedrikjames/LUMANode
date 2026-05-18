@@ -1288,11 +1288,11 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if err := verifyStartedContainerWorkload(ctx, plan); err != nil {
 		return err
 	}
-	if plan.Healthcheck == "" {
-		return nil
-	}
 	if err := verifyStartedContainerHealthcheck(ctx, plan); err != nil {
 		return err
+	}
+	if plan.Healthcheck == "" {
+		return nil
 	}
 	return waitForStartedContainerHealthy(ctx, plan)
 }
@@ -1462,8 +1462,17 @@ func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan)
 		return fmt.Errorf("docker container healthcheck inspect failed: %w: %s", err, string(output))
 	}
 	trimmed := strings.TrimSpace(string(output))
-	if trimmed == "" || trimmed == "null" {
+	if trimmed == "" {
 		return fmt.Errorf("docker container %q is missing expected healthcheck configuration", plan.ContainerName)
+	}
+	if trimmed == "null" {
+		if plan.Healthcheck == "" {
+			return nil
+		}
+		return fmt.Errorf("docker container %q is missing expected healthcheck configuration", plan.ContainerName)
+	}
+	if plan.Healthcheck == "" {
+		return fmt.Errorf("docker container %q kept unexpected image healthcheck", plan.ContainerName)
 	}
 	var healthcheck dockerHealthcheckConfig
 	if err := json.Unmarshal([]byte(trimmed), &healthcheck); err != nil {

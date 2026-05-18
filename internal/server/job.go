@@ -696,6 +696,8 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 			"--health-timeout", defaultContainerHealthTimeout,
 			"--health-retries", strconv.Itoa(defaultContainerHealthRetries),
 		)
+	} else {
+		args = append(args, "--no-healthcheck")
 	}
 	args = append(args, resolvedContainerImage(job))
 	if job.Command != "" {

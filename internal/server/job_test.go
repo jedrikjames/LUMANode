@@ -178,6 +178,21 @@ func TestDockerRunArgsClearsImageEntrypoint(t *testing.T) {
 	}
 }
 
+func TestDockerRunArgsDisablesInheritedImageHealthcheck(t *testing.T) {
+	job := sampleJob()
+	job.Healthcheck = ""
+	args, err := dockerRunArgs(job)
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	if !slices.Contains(args, "--no-healthcheck") {
+		t.Fatalf("expected docker run to disable inherited image healthchecks, got %#v", args)
+	}
+	if slices.Contains(args, "--health-cmd") {
+		t.Fatalf("expected docker run not to configure a healthcheck when none is signed, got %#v", args)
+	}
+}
+
 func TestDockerRunArgsUsesPinnedImageDigest(t *testing.T) {
 	job := sampleJob()
 	job.Image = "nginx:1.27-alpine"
@@ -3013,6 +3028,34 @@ func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 				t.Fatalf("expected %s verification failure, got %v", tt.contains, err)
 			}
 		})
+	}
+}
+
+func TestVerifyStartedContainerHealthcheckRejectsInheritedImageHealthcheck(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_HEALTHCHECK_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Healthcheck = ""
+
+	t.Setenv("DOCKER_HEALTHCHECK_OUTPUT", `{"Test":["CMD-SHELL","curl -fsS http://image.local"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}`)
+	err = verifyStartedContainerHealthcheck(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "unexpected image healthcheck") {
+		t.Fatalf("expected inherited image healthcheck rejection, got %v", err)
+	}
+
+	t.Setenv("DOCKER_HEALTHCHECK_OUTPUT", "null")
+	if err := verifyStartedContainerHealthcheck(context.Background(), plan); err != nil {
+		t.Fatalf("expected absent healthcheck to pass when none is signed, got %v", err)
 	}
 }
 
