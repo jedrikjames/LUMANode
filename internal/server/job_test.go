@@ -676,7 +676,21 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 					Target: "/data/../data",
 				})
 			},
-			want: "duplicate mount target",
+			want: "overlapping mount target",
+		},
+		{
+			name: "nested mount target",
+			edit: func(job *DeployJob) {
+				job.Mounts = append(job.Mounts, struct {
+					Source   string `json:"source"`
+					Target   string `json:"target"`
+					ReadOnly bool   `json:"readOnly"`
+				}{
+					Source: "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/config",
+					Target: "/data/config",
+				})
+			},
+			want: "overlapping mount target",
 		},
 		{
 			name: "wrong tenant network",

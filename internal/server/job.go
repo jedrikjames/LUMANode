@@ -247,8 +247,10 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if unsafeMountTarget(target) {
 			return fmt.Errorf("deployment job mount target is unsafe")
 		}
-		if _, exists := mountTargets[target]; exists {
-			return fmt.Errorf("deployment job has duplicate mount target")
+		for existing := range mountTargets {
+			if mountTargetsOverlap(existing, target) {
+				return fmt.Errorf("deployment job has overlapping mount target")
+			}
 		}
 		mountTargets[target] = struct{}{}
 	}
@@ -400,6 +402,12 @@ func unsafeMountTarget(target string) bool {
 		}
 	}
 	return false
+}
+
+func mountTargetsOverlap(left string, right string) bool {
+	left = filepath.Clean(left)
+	right = filepath.Clean(right)
+	return left == right || strings.HasPrefix(left, right+"/") || strings.HasPrefix(right, left+"/")
 }
 
 func validConfinementProfile(profile string) bool {
