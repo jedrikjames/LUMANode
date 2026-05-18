@@ -1489,7 +1489,7 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if fields[38] != "none" {
 		return fmt.Errorf("docker container %q has unexpected isolation mode", plan.ContainerName)
 	}
-	if fields[39] != "0" {
+	if fields[39] != strconv.Itoa(defaultContainerOomScoreAdj) {
 		return fmt.Errorf("docker container %q has unexpected OOM score adjustment", plan.ContainerName)
 	}
 	if fields[40] != "0" {

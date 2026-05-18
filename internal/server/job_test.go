@@ -110,6 +110,8 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"--restart",
 		"no",
 		"--oom-kill-disable=false",
+		"--oom-score-adj",
+		"0",
 		"--pull",
 		"never",
 		"--network",

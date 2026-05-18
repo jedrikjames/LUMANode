@@ -20,6 +20,7 @@ const defaultContainerUser = "10000:10000"
 const defaultContainerUsernsMode = "private"
 const defaultContainerPidMode = "private"
 const defaultContainerUTSMode = "private"
+const defaultContainerOomScoreAdj = 0
 const defaultContainerStopTimeoutSeconds = 30
 const defaultContainerHealthInterval = "30s"
 const defaultContainerHealthTimeout = "5s"
@@ -591,6 +592,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--stop-timeout", strconv.Itoa(defaultContainerStopTimeoutSeconds),
 		"--restart", "no",
 		"--oom-kill-disable=false",
+		"--oom-score-adj", strconv.Itoa(defaultContainerOomScoreAdj),
 		"--pull", "never",
 		"--network", job.Network.Name,
 		"--security-opt", "no-new-privileges=true",
