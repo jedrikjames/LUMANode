@@ -2165,7 +2165,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2257,7 +2257,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2346,7 +2346,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2436,7 +2436,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2515,7 +2515,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2613,7 +2613,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "true true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "true true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2672,7 +2672,7 @@ func TestVerifyStartedContainerIsolationRequiresInit(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo "false true 512 none private no false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+  echo "false true 512 none private no false 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
   exit 0
 fi
 exit 1
@@ -2685,6 +2685,26 @@ exit 1
 	err = verifyStartedContainerIsolation(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "init process") {
 		t.Fatalf("expected init verification failure, got %v", err)
+	}
+}
+
+func TestVerifyStartedContainerIsolationRequiresStopTimeout(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "false true 512 none private no true 5 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerIsolation(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "stop timeout") {
+		t.Fatalf("expected stop timeout verification failure, got %v", err)
 	}
 }
 
@@ -2711,7 +2731,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 2 luma-tenant_demo,bridge,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 2 luma-tenant_demo,bridge,"
       exit 0
       ;;
     *.State.Running*)
@@ -2789,7 +2809,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2887,7 +2907,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
@@ -2965,7 +2985,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.Config.Image*)
@@ -3049,7 +3069,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.Privileged*)
-      echo "false true 512 none private no true luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
+      echo "false true 512 none private no true 30 luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo,"
       exit 0
       ;;
     *.State.Running*)
