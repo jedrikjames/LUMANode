@@ -49,6 +49,7 @@ type RuntimeStatus struct {
 	Docker                       bool              `json:"docker"`
 	DockerCgroupV2               bool              `json:"dockerCgroupV2"`
 	DockerCgroupDriverSystemd    bool              `json:"dockerCgroupDriverSystemd"`
+	DockerDebugDisabled          bool              `json:"dockerDebugDisabled"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -644,6 +645,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerCgroupDriver"] = "docker cgroup driver must be systemd"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Debug}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerDebug"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerDebug"] == "" {
+				status.Errors["dockerDebug"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "false") {
+			status.DockerDebugDisabled = true
+		} else {
+			status.Errors["dockerDebug"] = "docker daemon debug mode must be disabled"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -744,7 +756,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
