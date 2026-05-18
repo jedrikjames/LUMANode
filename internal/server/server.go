@@ -53,6 +53,7 @@ type RuntimeStatus struct {
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
+	DockerStorageDType           bool              `json:"dockerStorageDType"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
 	DockerLocalEndpoint          bool              `json:"dockerLocalEndpoint"`
 	DockerSocketProtected        bool              `json:"dockerSocketProtected"`
@@ -677,6 +678,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerStorageOverlay2"] = "docker storage driver is not overlay2"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .DriverStatus}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerStorageDType"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerStorageDType"] == "" {
+				status.Errors["dockerStorageDType"] = err.Error()
+			}
+		} else if dockerOverlaySupportsDType(string(output)) {
+			status.DockerStorageDType = true
+		} else {
+			status.Errors["dockerStorageDType"] = "docker overlay2 backing filesystem must support d_type"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "version", "--format", "{{.Server.Version}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerServerVersion"] = strings.TrimSpace(string(output))
@@ -720,7 +732,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -767,6 +779,37 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
 	}
 	return info.Mode().Perm()&0o002 == 0, nil
+}
+
+func dockerOverlaySupportsDType(raw string) bool {
+	var rows [][]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(raw)), &rows); err != nil {
+		status := strings.ToLower(raw)
+		index := strings.Index(status, "supports d_type")
+		if index < 0 {
+			index = strings.Index(status, "supports dtype")
+		}
+		if index < 0 {
+			return false
+		}
+		valueStart := strings.Index(status[index:], ":")
+		if valueStart < 0 {
+			return false
+		}
+		fields := strings.Fields(status[index+valueStart+1:])
+		return len(fields) > 0 && fields[0] == "true"
+	}
+	for _, row := range rows {
+		if len(row) < 2 {
+			continue
+		}
+		name := strings.ToLower(strings.TrimSpace(row[0]))
+		value := strings.ToLower(strings.TrimSpace(row[1]))
+		if name == "supports d_type" || name == "supports dtype" {
+			return value == "true"
+		}
+	}
+	return false
 }
 
 func dockerServerVersionSupported(version string) bool {

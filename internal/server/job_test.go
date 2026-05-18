@@ -1209,6 +1209,10 @@ if [ "$1" = "info" ]; then
     echo overlay2
     exit 0
   fi
+  if [ "$3" = "{{json .DriverStatus}}" ]; then
+    echo '[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]'
+    exit 0
+  fi
   echo 2
   exit 0
 fi
@@ -1224,7 +1228,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1250,6 +1254,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo overlay2
+    exit 0
+  fi
+  if [ "$3" = "{{json .DriverStatus}}" ]; then
+    echo '[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]'
     exit 0
   fi
   echo 2
@@ -1303,6 +1311,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo overlay2
+    exit 0
+  fi
+  if [ "$3" = "{{json .DriverStatus}}" ]; then
+    echo '[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]'
     exit 0
   fi
   echo 2
@@ -1371,11 +1383,29 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerServerVersionSupported {
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
 		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerServerVersion"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
+	}
+}
+
+func TestDockerOverlaySupportsDType(t *testing.T) {
+	if !dockerOverlaySupportsDType(`[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]`) {
+		t.Fatal("expected JSON DriverStatus with Supports d_type=true to pass")
+	}
+	if dockerOverlaySupportsDType(`[["Backing Filesystem","xfs"],["Supports d_type","false"]]`) {
+		t.Fatal("expected JSON DriverStatus with Supports d_type=false to fail")
+	}
+	if !dockerOverlaySupportsDType("Backing Filesystem: extfs Supports d_type: true") {
+		t.Fatal("expected text fallback with Supports d_type true to pass")
+	}
+	if dockerOverlaySupportsDType("Backing Filesystem: extfs Supports d_type: false") {
+		t.Fatal("expected text fallback with Supports d_type false to fail")
+	}
+	if dockerOverlaySupportsDType("Supports d_type: false\nNative Overlay Diff: true") {
+		t.Fatal("expected text fallback with unrelated true value to fail")
 	}
 }
 
