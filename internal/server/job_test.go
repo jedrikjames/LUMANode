@@ -433,12 +433,9 @@ func TestEnsureTenantDirectoryRejectsWorldWritableTenantPathComponent(t *testing
 func TestFirewallCommandsDeduplicatePublishedPorts(t *testing.T) {
 	job := sampleJob()
 	job.Ports = append(job.Ports, job.Ports[0])
-	plan, err := deploymentPlan(job)
-	if err != nil {
-		t.Fatalf("deploymentPlan returned error: %v", err)
-	}
-	if len(plan.Firewall) != 9 {
-		t.Fatalf("expected duplicate published port to produce one nft rule, got %#v", plan.Firewall)
+	firewall := firewallCommands(job)
+	if len(firewall) != 9 {
+		t.Fatalf("expected duplicate published port to produce one nft rule, got %#v", firewall)
 	}
 }
 
@@ -757,6 +754,17 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			name: "invalid protocol",
 			edit: func(job *DeployJob) { job.Ports[0].Protocol = "sctp" },
 			want: "invalid port protocol",
+		},
+		{
+			name: "duplicate published port",
+			edit: func(job *DeployJob) {
+				job.Ports = append(job.Ports, struct {
+					HostPort      int    `json:"hostPort"`
+					ContainerPort int    `json:"containerPort"`
+					Protocol      string `json:"protocol"`
+				}{HostPort: 8080, ContainerPort: 8081, Protocol: "tcp"})
+			},
+			want: "duplicate published port",
 		},
 		{
 			name: "invalid environment key",

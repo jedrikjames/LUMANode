@@ -214,6 +214,7 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 	if job.Network.Mode != "tenant-bridge" || job.Network.Name != "luma-"+job.TenantID {
 		return fmt.Errorf("deployment job uses invalid tenant network")
 	}
+	publishedPorts := map[string]struct{}{}
 	for _, port := range job.Ports {
 		if port.HostPort <= 0 || port.HostPort > 65535 || port.ContainerPort <= 0 || port.ContainerPort > 65535 {
 			return fmt.Errorf("deployment job has invalid port mapping")
@@ -221,6 +222,15 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if port.Protocol != "" && port.Protocol != "tcp" && port.Protocol != "udp" {
 			return fmt.Errorf("deployment job has invalid port protocol")
 		}
+		protocol := port.Protocol
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		publishedPort := fmt.Sprintf("%d/%s", port.HostPort, protocol)
+		if _, exists := publishedPorts[publishedPort]; exists {
+			return fmt.Errorf("deployment job has duplicate published port")
+		}
+		publishedPorts[publishedPort] = struct{}{}
 	}
 	if len(job.Env) > maxContainerEnvVars {
 		return fmt.Errorf("deployment job has too many environment variables")
