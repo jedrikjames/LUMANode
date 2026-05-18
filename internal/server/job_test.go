@@ -648,6 +648,25 @@ func TestEgressFirewallCommandsRejectInvalidContainerIP(t *testing.T) {
 	}
 }
 
+func TestVerifyDeploymentEgressFirewallRequiresExpectedRules(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+if [ "$1" = "-a" ] && [ "$6" = "forward" ]; then
+  echo 'ip saddr 172.18.0.4 drop comment "luma:dep_test:egress:drop" # handle 20'
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:drop": {}}); err != nil {
+		t.Fatalf("expected matching deployment egress rule to verify, got %v", err)
+	}
+	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:001": {}})
+	if err == nil || !strings.Contains(err.Error(), "unexpected deployment rule") {
+		t.Fatalf("expected unexpected egress rule verification failure, got %v", err)
+	}
+}
+
 func TestStaleDeploymentFirewallRulesOnlyTargetsCurrentDeployment(t *testing.T) {
 	output := `
 table inet lumapanel {
@@ -2581,10 +2600,109 @@ exit 0
 	}
 }
 
+func TestExecuteDeploymentPlanRemovesStartedContainerWhenEgressVerificationFails(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "docker.log")
+	stateFile := filepath.Join(tempDir, "container-state")
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "network" ] && [ "$2" = "inspect" ] && [ "$3" = "-f" ]; then
+  echo "true tenant_demo false"
+  exit 0
+fi
+if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
+      exit 0
+      ;;
+    *.HostConfig.NanoCpus*)
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
+      exit 0
+      ;;
+    *.HostConfig.Privileged*)
+      echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      exit 0
+      ;;
+    *.State.Running*)
+      echo "true healthy true dep_test tenant_demo node_local"
+      exit 0
+      ;;
+    *luma.managed*)
+      if [ -f "$CONTAINER_STATE" ]; then
+        echo "true dep_test tenant_demo node_local"
+        exit 0
+      fi
+      echo "No such container" >&2
+      exit 1
+      ;;
+    *NetworkSettings.Networks*)
+      echo "172.18.0.4"
+      exit 0
+      ;;
+  esac
+fi
+if [ "$1" = "run" ]; then
+  touch "$CONTAINER_STATE"
+fi
+if [ "$1" = "rm" ]; then
+  rm -f "$CONTAINER_STATE"
+fi
+printf '%s\n' "$*" >> "$DOCKER_LOG"
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+if [ "$1" = "-a" ]; then
+  exit 0
+fi
+exit 0
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("DOCKER_LOG", logFile)
+	t.Setenv("CONTAINER_STATE", stateFile)
+
+	job := sampleJob()
+	job.Egress.Mode = "deny-all"
+	plan, err := deploymentPlan(job)
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	err = executeDeploymentPlan(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "missing deployment rule") {
+		t.Fatalf("expected egress verification failure, got %v", err)
+	}
+	content, readErr := os.ReadFile(logFile)
+	if readErr != nil {
+		t.Fatalf("read docker log: %v", readErr)
+	}
+	if !strings.Contains(string(content), "rm --force --volumes luma-dep_test") {
+		t.Fatalf("expected failed egress verification to remove started container, got %q", string(content))
+	}
+	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
+		t.Fatalf("expected cleanup to remove container state, statErr=%v", statErr)
+	}
+}
+
 func TestExecuteDeploymentPlanPrunesStaleEgressRulesForAllowAllRedeploy(t *testing.T) {
 	tempDir := t.TempDir()
 	dockerLog := filepath.Join(tempDir, "docker.log")
 	nftLog := filepath.Join(tempDir, "nft.log")
+	egressDeleted := filepath.Join(tempDir, "egress-deleted")
 	stateFile := filepath.Join(tempDir, "container-state")
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "network" ] && [ "$2" = "inspect" ] && [ "$3" = "-f" ]; then
@@ -2649,8 +2767,14 @@ if [ "$1" = "-a" ] && [ "$6" = "input" ]; then
   exit 0
 fi
 if [ "$1" = "-a" ] && [ "$6" = "forward" ]; then
+  if [ -f "$EGRESS_DELETED" ]; then
+    exit 0
+  fi
   echo 'ip saddr 172.18.0.4 drop comment "luma:dep_test:egress:drop" # handle 55'
   exit 0
+fi
+if [ "$1" = "delete" ] && [ "$5" = "forward" ] && [ "$7" = "55" ]; then
+  touch "$EGRESS_DELETED"
 fi
 exit 0
 `)
@@ -2658,6 +2782,7 @@ exit 0
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
 	t.Setenv("DOCKER_LOG", dockerLog)
 	t.Setenv("NFT_LOG", nftLog)
+	t.Setenv("EGRESS_DELETED", egressDeleted)
 	t.Setenv("CONTAINER_STATE", stateFile)
 
 	job := sampleJob()

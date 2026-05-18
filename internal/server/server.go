@@ -2018,7 +2018,7 @@ func enforceContainerEgress(ctx context.Context, plan DeploymentPlan) error {
 		}
 	}
 	if plan.Egress.Mode == "" || plan.Egress.Mode == "allow-all" {
-		return nil
+		return verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, map[string]struct{}{})
 	}
 	inspect := exec.CommandContext(
 		ctx,
@@ -2055,6 +2055,41 @@ func enforceContainerEgress(ctx context.Context, plan DeploymentPlan) error {
 	for _, command := range commands[bootstrapCount:] {
 		if err := runIdempotentCommand(ctx, command); err != nil {
 			return err
+		}
+	}
+	if err := verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, desiredFirewallComments(commands[bootstrapCount:])); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, desired map[string]struct{}) error {
+	if deploymentID == "" {
+		return nil
+	}
+	list := exec.CommandContext(ctx, "nft", "-a", "list", "chain", "inet", "lumapanel", "forward")
+	output, err := list.CombinedOutput()
+	if err != nil {
+		if len(desired) == 0 && nftObjectMissing(string(output)) {
+			return nil
+		}
+		return fmt.Errorf("nft egress verification list failed: %w: %s", err, string(output))
+	}
+	seen := map[string]struct{}{}
+	prefix := "luma:" + deploymentID + ":egress:"
+	for _, line := range strings.Split(string(output), "\n") {
+		rule, ok := parseNftManagedRule(line)
+		if !ok || !strings.HasPrefix(rule.Comment, prefix) {
+			continue
+		}
+		if _, keep := desired[rule.Comment]; !keep {
+			return fmt.Errorf("nft egress verification found unexpected deployment rule %q", rule.Comment)
+		}
+		seen[rule.Comment] = struct{}{}
+	}
+	for comment := range desired {
+		if _, ok := seen[comment]; !ok {
+			return fmt.Errorf("nft egress verification missing deployment rule %q", comment)
 		}
 	}
 	return nil
