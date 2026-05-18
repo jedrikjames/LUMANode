@@ -20,6 +20,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -1388,14 +1390,14 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container isolation inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 16 {
+	if len(fields) < 17 {
 		return fmt.Errorf("docker container %q isolation inspect returned incomplete data", plan.ContainerName)
 	}
 	if fields[0] != "false" {
@@ -1436,6 +1438,9 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if !containsNetworkName(attachedNetworks, networkName) {
 		return fmt.Errorf("docker container %q is missing expected tenant network attachment", plan.ContainerName)
 	}
+	if !containerPortBindingsMatch(plan.Ports, fields[16]) {
+		return fmt.Errorf("docker container %q did not keep expected port bindings", plan.ContainerName)
+	}
 	if fields[11] != defaultContainerUser {
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
 	}
@@ -1450,6 +1455,32 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		return fmt.Errorf("docker container %q did not keep expected security options", plan.ContainerName)
 	}
 	return nil
+}
+
+func containerPortBindingsMatch(ports []PortPlan, actual string) bool {
+	if len(ports) == 0 {
+		return strings.TrimSpace(actual) == "none"
+	}
+	expected := make([]string, 0, len(ports))
+	for _, port := range ports {
+		protocol := port.Protocol
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		expected = append(expected, fmt.Sprintf("%d/%s=%d;", port.ContainerPort, protocol, port.HostPort))
+	}
+	sort.Strings(expected)
+	actualBindings := strings.Split(strings.TrimSpace(actual), ",")
+	normalizedActual := make([]string, 0, len(actualBindings))
+	for _, binding := range actualBindings {
+		binding = strings.TrimSpace(binding)
+		if binding == "" {
+			continue
+		}
+		normalizedActual = append(normalizedActual, binding)
+	}
+	sort.Strings(normalizedActual)
+	return slices.Equal(expected, normalizedActual)
 }
 
 func containsNetworkName(networks []string, target string) bool {
