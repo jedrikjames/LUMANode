@@ -1037,7 +1037,7 @@ func executeDeploymentPlan(ctx context.Context, plan DeploymentPlan) error {
 	if err := reconcileDeploymentFirewall(ctx, plan.DeploymentID, desiredFirewallComments(plan.Firewall)); err != nil {
 		return err
 	}
-	if err := removeExistingContainer(ctx, plan.ContainerRemove); err != nil {
+	if err := removeExistingContainer(ctx, plan); err != nil {
 		return err
 	}
 	cmd := exec.CommandContext(ctx, plan.ContainerRun.Name, plan.ContainerRun.Args...)
@@ -1239,7 +1239,7 @@ func pathWithinRoot(root string, path string) bool {
 
 func cleanupFailedDeployment(ctx context.Context, plan DeploymentPlan) error {
 	var failures []string
-	if err := removeExistingContainer(ctx, plan.ContainerRemove); err != nil {
+	if err := removeExistingContainer(ctx, plan); err != nil {
 		failures = append(failures, err.Error())
 	}
 	if err := cleanupDeploymentFirewall(ctx, plan.DeploymentID); err != nil {
@@ -1780,18 +1780,18 @@ func enforceContainerEgress(ctx context.Context, plan DeploymentPlan) error {
 	return nil
 }
 
-func removeExistingContainer(ctx context.Context, command CommandPlan) error {
+func removeExistingContainer(ctx context.Context, plan DeploymentPlan) error {
+	command := plan.ContainerRemove
 	if command.Name == "" || len(command.Args) == 0 {
 		return nil
 	}
 	containerName := command.Args[len(command.Args)-1]
-	deploymentID := strings.TrimPrefix(containerName, "luma-")
 	inspect := exec.CommandContext(
 		ctx,
 		command.Name,
 		"inspect",
 		"-f",
-		`{{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }}`,
+		`{{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }}`,
 		containerName,
 	)
 	inspectOutput, inspectErr := inspect.CombinedOutput()
@@ -1803,7 +1803,7 @@ func removeExistingContainer(ctx context.Context, command CommandPlan) error {
 		return fmt.Errorf("docker container ownership inspect failed: %w: %s", inspectErr, inspectText)
 	}
 	ownership := strings.Fields(strings.TrimSpace(string(inspectOutput)))
-	if len(ownership) < 2 || ownership[0] != "true" || ownership[1] != deploymentID {
+	if len(ownership) < 4 || ownership[0] != "true" || ownership[1] != plan.DeploymentID || ownership[2] != plan.TenantID || ownership[3] != plan.NodeID {
 		return fmt.Errorf("docker container replace refused for unmanaged container %q", containerName)
 	}
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)

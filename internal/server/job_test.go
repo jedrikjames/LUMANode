@@ -2027,8 +2027,13 @@ exit 0
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
 	t.Setenv("DOCKER_LOG", logFile)
 
-	t.Setenv("DOCKER_LABEL_OUTPUT", "false dep_test")
-	err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "--volumes", "luma-dep_test"}})
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+
+	t.Setenv("DOCKER_LABEL_OUTPUT", "false dep_test tenant_demo node_local")
+	err = removeExistingContainer(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "unmanaged container") {
 		t.Fatalf("expected unmanaged container refusal, got %v", err)
 	}
@@ -2036,8 +2041,17 @@ exit 0
 		t.Fatalf("expected docker rm not to run for unmanaged container, readErr=%v", readErr)
 	}
 
-	t.Setenv("DOCKER_LABEL_OUTPUT", "true dep_test")
-	if err := removeExistingContainer(context.Background(), CommandPlan{Name: "docker", Args: []string{"rm", "--force", "--volumes", "luma-dep_test"}}); err != nil {
+	t.Setenv("DOCKER_LABEL_OUTPUT", "true dep_test tenant_demo node_other")
+	err = removeExistingContainer(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "unmanaged container") {
+		t.Fatalf("expected mismatched node label refusal, got %v", err)
+	}
+	if _, readErr := os.ReadFile(logFile); !os.IsNotExist(readErr) {
+		t.Fatalf("expected docker rm not to run for mismatched node label, readErr=%v", readErr)
+	}
+
+	t.Setenv("DOCKER_LABEL_OUTPUT", "true dep_test tenant_demo node_local")
+	if err := removeExistingContainer(context.Background(), plan); err != nil {
 		t.Fatalf("expected managed container removal to pass, got %v", err)
 	}
 	content, err := os.ReadFile(logFile)
@@ -2160,7 +2174,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2252,7 +2266,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2341,7 +2355,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2431,7 +2445,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2510,7 +2524,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2608,7 +2622,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2686,7 +2700,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2764,7 +2778,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2862,7 +2876,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -2944,7 +2958,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
@@ -3024,7 +3038,7 @@ if [ "$1" = "inspect" ]; then
       ;;
     *luma.managed*)
       if [ -f "$CONTAINER_STATE" ]; then
-        echo "true dep_test"
+        echo "true dep_test tenant_demo node_local"
         exit 0
       fi
       echo "No such container" >&2
