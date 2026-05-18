@@ -1690,6 +1690,24 @@ exit 0
 	}
 }
 
+func TestDockerSocketProtectedRejectsSymlink(t *testing.T) {
+	tempDir := t.TempDir()
+	socketPath := filepath.Join(tempDir, "docker.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen on unix socket: %v", err)
+	}
+	defer listener.Close()
+	linkPath := filepath.Join(tempDir, "docker-link.sock")
+	if err := os.Symlink(socketPath, linkPath); err != nil {
+		t.Fatalf("create socket symlink: %v", err)
+	}
+	protected, err := dockerSocketProtected("unix://" + linkPath)
+	if err == nil || !strings.Contains(err.Error(), "must not be a symlink") || protected {
+		t.Fatalf("expected docker socket symlink rejection, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestRuntimeStatusRejectsWorldWritableDockerRootDir(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
@@ -1782,6 +1800,22 @@ exit 0
 	}
 	if status.Errors["dockerRootDir"] == "" {
 		t.Fatalf("expected Docker root directory error, got %#v", status.Errors)
+	}
+}
+
+func TestDockerRootDirProtectedRejectsSymlink(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o700); err != nil {
+		t.Fatalf("create docker root dir: %v", err)
+	}
+	linkPath := filepath.Join(tempDir, "docker-root-link")
+	if err := os.Symlink(rootDir, linkPath); err != nil {
+		t.Fatalf("create docker root symlink: %v", err)
+	}
+	protected, err := dockerRootDirProtected(linkPath)
+	if err == nil || !strings.Contains(err.Error(), "must not be a symlink") || protected {
+		t.Fatalf("expected docker root symlink rejection, protected=%v err=%v", protected, err)
 	}
 }
 

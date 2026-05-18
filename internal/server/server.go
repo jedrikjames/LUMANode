@@ -925,9 +925,12 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if socketPath == "" {
 		return false, fmt.Errorf("docker unix socket path is empty")
 	}
-	info, err := os.Stat(socketPath)
+	info, err := os.Lstat(socketPath)
 	if err != nil {
 		return false, fmt.Errorf("docker unix socket stat failed: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("docker endpoint %q must not be a symlink", socketPath)
 	}
 	if info.Mode()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
@@ -943,9 +946,12 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !filepath.IsAbs(rootDir) {
 		return false, fmt.Errorf("docker root directory %q is not absolute", rootDir)
 	}
-	info, err := os.Stat(rootDir)
+	info, err := os.Lstat(rootDir)
 	if err != nil {
 		return false, fmt.Errorf("docker root directory stat failed: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("docker root directory %q must not be a symlink", rootDir)
 	}
 	if !info.IsDir() {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
