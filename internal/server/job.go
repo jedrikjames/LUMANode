@@ -389,6 +389,9 @@ func validateEgressPolicy(job DeployJob) error {
 		if err != nil {
 			return fmt.Errorf("deployment job has invalid egress destination CIDR")
 		}
+		if cidr.IP.To4() == nil {
+			return fmt.Errorf("deployment job egress destination CIDR must be IPv4")
+		}
 		if rule.DestinationCIDR != cidr.String() {
 			return fmt.Errorf("deployment job has non-canonical egress destination CIDR")
 		}
