@@ -22,6 +22,7 @@ const defaultContainerPidMode = "private"
 const defaultContainerUTSMode = "private"
 const defaultContainerOomScoreAdj = 0
 const defaultContainerStopTimeoutSeconds = 30
+const defaultContainerStopSignal = "SIGTERM"
 const defaultContainerHealthInterval = "30s"
 const defaultContainerHealthTimeout = "5s"
 const defaultContainerHealthRetries = 3
@@ -590,6 +591,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--pid", defaultContainerPidMode,
 		"--uts", defaultContainerUTSMode,
 		"--stop-timeout", strconv.Itoa(defaultContainerStopTimeoutSeconds),
+		"--stop-signal", defaultContainerStopSignal,
 		"--restart", "no",
 		"--oom-kill-disable=false",
 		"--oom-score-adj", strconv.Itoa(defaultContainerOomScoreAdj),
