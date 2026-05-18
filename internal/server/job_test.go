@@ -170,6 +170,27 @@ func TestDockerRunArgsUsesPinnedImageDigest(t *testing.T) {
 	}
 }
 
+func TestDockerRunArgsCleansMountPaths(t *testing.T) {
+	job := sampleJob()
+	job.Mounts[0].Source = "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/./world/.."
+	job.Mounts[0].Target = "/data/./world/.."
+	args, err := dockerRunArgs(job)
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	expectedMount := "type=bind,src=/srv/lumapanel/tenants/tenant_demo/deployments/dep_test,dst=/data,rw,bind-propagation=rprivate"
+	if !slices.Contains(args, expectedMount) {
+		t.Fatalf("expected cleaned mount argument %q, got %#v", expectedMount, args)
+	}
+	plan, err := deploymentPlan(job)
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	if len(plan.Mounts) != 1 || plan.Mounts[0].Source != "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test" || plan.Mounts[0].Target != "/data" {
+		t.Fatalf("expected cleaned mount plan, got %#v", plan.Mounts)
+	}
+}
+
 func TestDockerRunArgsRejectsIncompleteJob(t *testing.T) {
 	_, err := dockerRunArgs(DeployJob{})
 	if err == nil {

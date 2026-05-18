@@ -550,7 +550,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		if mount.ReadOnly {
 			mode = "ro"
 		}
-		args = append(args, "--mount", fmt.Sprintf("type=bind,src=%s,dst=%s,%s,bind-propagation=rprivate", mount.Source, mount.Target, mode))
+		args = append(args, "--mount", fmt.Sprintf("type=bind,src=%s,dst=%s,%s,bind-propagation=rprivate", filepath.Clean(mount.Source), filepath.Clean(mount.Target), mode))
 	}
 	if job.Healthcheck != "" {
 		args = append(
@@ -577,8 +577,9 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 	ports := make([]PortPlan, 0, len(job.Ports))
 	for _, mount := range job.Mounts {
 		source := filepath.Clean(mount.Source)
+		target := filepath.Clean(mount.Target)
 		directorySet[source] = struct{}{}
-		mounts = append(mounts, MountPlan{Source: source, Target: mount.Target, ReadOnly: mount.ReadOnly})
+		mounts = append(mounts, MountPlan{Source: source, Target: target, ReadOnly: mount.ReadOnly})
 	}
 	for _, port := range job.Ports {
 		protocol := port.Protocol
