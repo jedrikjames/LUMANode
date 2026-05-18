@@ -1390,14 +1390,14 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }} {{ if .HostConfig.CapAdd }}{{ range .HostConfig.CapAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.GroupAdd }}{{ range .HostConfig.GroupAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ len .HostConfig.Devices }} {{ len .HostConfig.DeviceRequests }} {{ if .HostConfig.VolumesFrom }}{{ range .HostConfig.VolumesFrom }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Binds }}{{ range .HostConfig.Binds }}{{ . }},{{ end }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container isolation inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 29 {
+	if len(fields) < 35 {
 		return fmt.Errorf("docker container %q isolation inspect returned incomplete data", plan.ContainerName)
 	}
 	if fields[0] != "false" {
@@ -1464,6 +1464,18 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	}
 	if fields[28] != "none" {
 		return fmt.Errorf("docker container %q has unexpected MAC address override", plan.ContainerName)
+	}
+	if fields[29] != "none" {
+		return fmt.Errorf("docker container %q has unexpected added capabilities", plan.ContainerName)
+	}
+	if fields[30] != "none" {
+		return fmt.Errorf("docker container %q has unexpected supplemental groups", plan.ContainerName)
+	}
+	if fields[31] != "0" || fields[32] != "0" {
+		return fmt.Errorf("docker container %q has unexpected host device access", plan.ContainerName)
+	}
+	if fields[33] != "none" || fields[34] != "none" {
+		return fmt.Errorf("docker container %q has unexpected inherited host mounts", plan.ContainerName)
 	}
 	if fields[15] != defaultContainerUser {
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
