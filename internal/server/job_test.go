@@ -879,6 +879,32 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			},
 			want: "invalid egress port",
 		},
+		{
+			name: "duplicate egress rule",
+			edit: func(job *DeployJob) {
+				job.Egress.Mode = "restricted"
+				job.Egress.Rules = []EgressPolicyRule{
+					{Protocol: "tcp", DestinationCIDR: "10.0.0.1/32", Port: 443},
+					{Protocol: "tcp", DestinationCIDR: "10.0.0.1/32", Port: 443},
+				}
+			},
+			want: "duplicate egress rule",
+		},
+		{
+			name: "too many egress rules",
+			edit: func(job *DeployJob) {
+				job.Egress.Mode = "restricted"
+				job.Egress.Rules = nil
+				for i := 0; i <= maxEgressPolicyRules; i++ {
+					job.Egress.Rules = append(job.Egress.Rules, EgressPolicyRule{
+						Protocol:        "tcp",
+						DestinationCIDR: fmt.Sprintf("10.10.%d.%d/32", i/256, i%256),
+						Port:            443,
+					})
+				}
+			},
+			want: "too many egress rules",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

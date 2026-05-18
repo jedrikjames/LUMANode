@@ -31,6 +31,7 @@ const maxContainerPortMappings = 256
 const maxContainerMounts = 64
 const maxContainerEnvVars = 128
 const maxContainerEnvValueLength = 4096
+const maxEgressPolicyRules = 256
 
 type DeployJob struct {
 	ID           string            `json:"id"`
@@ -373,6 +374,10 @@ func validateEgressPolicy(job DeployJob) error {
 	if mode == "restricted" && len(job.Egress.Rules) == 0 {
 		return fmt.Errorf("restricted egress policy requires allow rules")
 	}
+	if len(job.Egress.Rules) > maxEgressPolicyRules {
+		return fmt.Errorf("deployment job has too many egress rules")
+	}
+	seenRules := map[string]struct{}{}
 	for _, rule := range job.Egress.Rules {
 		if rule.Protocol != "tcp" && rule.Protocol != "udp" {
 			return fmt.Errorf("deployment job has invalid egress protocol")
@@ -380,9 +385,15 @@ func validateEgressPolicy(job DeployJob) error {
 		if rule.Port <= 0 || rule.Port > 65535 {
 			return fmt.Errorf("deployment job has invalid egress port")
 		}
-		if _, _, err := net.ParseCIDR(rule.DestinationCIDR); err != nil {
+		_, cidr, err := net.ParseCIDR(rule.DestinationCIDR)
+		if err != nil {
 			return fmt.Errorf("deployment job has invalid egress destination CIDR")
 		}
+		key := fmt.Sprintf("%s/%s/%d", rule.Protocol, cidr.String(), rule.Port)
+		if _, exists := seenRules[key]; exists {
+			return fmt.Errorf("deployment job has duplicate egress rule")
+		}
+		seenRules[key] = struct{}{}
 	}
 	return nil
 }
