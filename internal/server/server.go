@@ -67,6 +67,7 @@ type RuntimeStatus struct {
 	DockerLocalEndpoint          bool              `json:"dockerLocalEndpoint"`
 	DockerSocketProtected        bool              `json:"dockerSocketProtected"`
 	Nftables                     bool              `json:"nftables"`
+	NftablesUsable               bool              `json:"nftablesUsable"`
 	CgroupV2                     bool              `json:"cgroupV2"`
 	CgroupControllersReady       bool              `json:"cgroupControllersReady"`
 	Errors                       map[string]string `json:"errors,omitempty"`
@@ -831,6 +832,14 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		status.Errors["nftables"] = "nft CLI not found"
 	} else {
 		status.Nftables = true
+		if output, err := exec.CommandContext(ctx, "nft", "list", "ruleset").CombinedOutput(); err != nil {
+			status.Errors["nftablesUsable"] = strings.TrimSpace(string(output))
+			if status.Errors["nftablesUsable"] == "" {
+				status.Errors["nftablesUsable"] = err.Error()
+			}
+		} else {
+			status.NftablesUsable = true
+		}
 	}
 	cgroupControllersFile := a.cfg.RuntimeCgroupControllersFile
 	if cgroupControllersFile == "" {
@@ -848,7 +857,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
