@@ -120,6 +120,8 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"0",
 		"--pull",
 		"never",
+		"--entrypoint",
+		"",
 		"--network",
 		"luma-tenant_demo",
 		"--security-opt",
@@ -158,6 +160,21 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		if !slices.Contains(args, item) {
 			t.Fatalf("expected docker args to contain %q, got %#v", item, args)
 		}
+	}
+}
+
+func TestDockerRunArgsClearsImageEntrypoint(t *testing.T) {
+	args, err := dockerRunArgs(sampleJob())
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	entrypoint := slices.Index(args, "--entrypoint")
+	image := slices.Index(args, "nginx:1.27-alpine")
+	if entrypoint < 0 || entrypoint+1 >= len(args) || args[entrypoint+1] != "" {
+		t.Fatalf("expected docker run to clear inherited image entrypoint, got %#v", args)
+	}
+	if image < 0 || entrypoint > image {
+		t.Fatalf("expected entrypoint reset before image argument, got %#v", args)
 	}
 }
 
@@ -2480,6 +2497,10 @@ if [ "$1" = "inspect" ]; then
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -2580,6 +2601,10 @@ if [ "$1" = "inspect" ]; then
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
       ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      exit 0
+      ;;
     *.State.Running*)
       echo "true healthy true dep_test tenant_demo node_local"
       exit 0
@@ -2675,6 +2700,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *json\ .Config.Healthcheck*)
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2773,6 +2802,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *json\ .Config.Healthcheck*)
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2980,6 +3013,82 @@ func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 				t.Fatalf("expected %s verification failure, got %v", tt.contains, err)
 			}
 		})
+	}
+}
+
+func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *testing.T) {
+	cases := []struct {
+		name     string
+		output   string
+		contains string
+	}{
+		{
+			name:     "entrypoint",
+			output:   `{"Config":{"Entrypoint":["/docker-entrypoint.sh"],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "unexpected image entrypoint",
+		},
+		{
+			name:     "command",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","sleep 999"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "startup command",
+		},
+		{
+			name:     "signed-env",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
+			contains: `environment variable "LUMA_TENANT_ID"`,
+		},
+		{
+			name:     "reserved-env",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_other","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `environment variable "LUMA_DEPLOYMENT_ID"`,
+		},
+		{
+			name:     "malformed-env",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","BROKEN"]}}`,
+			contains: "malformed environment entry",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_WORKLOAD_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("DOCKER_WORKLOAD_OUTPUT", tt.output)
+			plan, err := deploymentPlan(sampleJob())
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainerWorkload(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected %s verification failure, got %v", tt.contains, err)
+			}
+		})
+	}
+}
+
+func TestVerifyStartedContainerWorkloadAllowsImageEnvironmentWithoutReservedDrift(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_WORKLOAD_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	if err := verifyStartedContainerWorkload(context.Background(), plan); err != nil {
+		t.Fatalf("expected workload verification to allow non-reserved image environment, got %v", err)
 	}
 }
 

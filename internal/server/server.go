@@ -1285,6 +1285,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if err := verifyStartedContainerImage(ctx, plan); err != nil {
 		return err
 	}
+	if err := verifyStartedContainerWorkload(ctx, plan); err != nil {
+		return err
+	}
 	if plan.Healthcheck == "" {
 		return nil
 	}
@@ -1385,6 +1388,56 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 	image := strings.TrimSpace(string(output))
 	if image != plan.ResolvedImage {
 		return fmt.Errorf("docker container %q did not keep expected digest-pinned image", plan.ContainerName)
+	}
+	return nil
+}
+
+type dockerWorkloadInspect struct {
+	Config struct {
+		Entrypoint []string `json:"Entrypoint"`
+		Cmd        []string `json:"Cmd"`
+		Env        []string `json:"Env"`
+	} `json:"Config"`
+}
+
+func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) error {
+	output, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{json .}}", plan.ContainerName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker container workload inspect failed: %w: %s", err, string(output))
+	}
+	var workload dockerWorkloadInspect
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(output))), &workload); err != nil {
+		return fmt.Errorf("docker container %q workload inspect returned invalid data: %w", plan.ContainerName, err)
+	}
+	if len(workload.Config.Entrypoint) != 0 {
+		return fmt.Errorf("docker container %q kept unexpected image entrypoint", plan.ContainerName)
+	}
+	expectedCommand := []string{"sh", "-lc", plan.Command}
+	if !slices.Equal(workload.Config.Cmd, expectedCommand) {
+		return fmt.Errorf("docker container %q did not keep expected startup command", plan.ContainerName)
+	}
+	actualEnv := map[string]string{}
+	for _, item := range workload.Config.Env {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok {
+			return fmt.Errorf("docker container %q has malformed environment entry", plan.ContainerName)
+		}
+		actualEnv[key] = value
+	}
+	for key, expected := range plan.Env {
+		if actualEnv[key] != expected {
+			return fmt.Errorf("docker container %q did not keep expected environment variable %q", plan.ContainerName, key)
+		}
+	}
+	reserved := map[string]string{
+		"LUMA_DEPLOYMENT_ID": plan.DeploymentID,
+		"LUMA_TENANT_ID":     plan.TenantID,
+		"LUMA_NODE_ID":       plan.NodeID,
+	}
+	for key, expected := range reserved {
+		if actual, ok := actualEnv[key]; ok && actual != expected {
+			return fmt.Errorf("docker container %q has drifted reserved environment variable %q", plan.ContainerName, key)
+		}
 	}
 	return nil
 }

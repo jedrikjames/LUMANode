@@ -113,27 +113,29 @@ type CommandPlan struct {
 }
 
 type DeploymentPlan struct {
-	DeploymentID    string        `json:"deploymentId"`
-	TenantID        string        `json:"tenantId"`
-	NodeID          string        `json:"nodeId"`
-	TenantRoot      string        `json:"tenantRoot"`
-	ContainerName   string        `json:"containerName"`
-	Resources       ResourcePlan  `json:"resources"`
-	ImageDigest     string        `json:"imageDigest,omitempty"`
-	ResolvedImage   string        `json:"resolvedImage,omitempty"`
-	SeccompProfile  string        `json:"seccompProfile"`
-	AppArmorProfile string        `json:"appArmorProfile"`
-	Egress          EgressPolicy  `json:"egress"`
-	Healthcheck     string        `json:"healthcheck,omitempty"`
-	Directories     []string      `json:"directories"`
-	Mounts          []MountPlan   `json:"mounts"`
-	Ports           []PortPlan    `json:"ports"`
-	NetworkInspect  CommandPlan   `json:"networkInspect"`
-	NetworkCreate   CommandPlan   `json:"networkCreate"`
-	Firewall        []CommandPlan `json:"firewall"`
-	ContainerRemove CommandPlan   `json:"containerRemove"`
-	ContainerRun    CommandPlan   `json:"containerRun"`
-	Commands        []CommandPlan `json:"commands"`
+	DeploymentID    string            `json:"deploymentId"`
+	TenantID        string            `json:"tenantId"`
+	NodeID          string            `json:"nodeId"`
+	TenantRoot      string            `json:"tenantRoot"`
+	ContainerName   string            `json:"containerName"`
+	Resources       ResourcePlan      `json:"resources"`
+	ImageDigest     string            `json:"imageDigest,omitempty"`
+	ResolvedImage   string            `json:"resolvedImage,omitempty"`
+	Command         string            `json:"command"`
+	Env             map[string]string `json:"env,omitempty"`
+	SeccompProfile  string            `json:"seccompProfile"`
+	AppArmorProfile string            `json:"appArmorProfile"`
+	Egress          EgressPolicy      `json:"egress"`
+	Healthcheck     string            `json:"healthcheck,omitempty"`
+	Directories     []string          `json:"directories"`
+	Mounts          []MountPlan       `json:"mounts"`
+	Ports           []PortPlan        `json:"ports"`
+	NetworkInspect  CommandPlan       `json:"networkInspect"`
+	NetworkCreate   CommandPlan       `json:"networkCreate"`
+	Firewall        []CommandPlan     `json:"firewall"`
+	ContainerRemove CommandPlan       `json:"containerRemove"`
+	ContainerRun    CommandPlan       `json:"containerRun"`
+	Commands        []CommandPlan     `json:"commands"`
 }
 
 type ResourcePlan struct {
@@ -636,6 +638,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--oom-kill-disable=false",
 		"--oom-score-adj", strconv.Itoa(defaultContainerOomScoreAdj),
 		"--pull", "never",
+		"--entrypoint", "",
 		"--network", job.Network.Name,
 		"--security-opt", "no-new-privileges=true",
 		"--security-opt", "seccomp=" + job.Security.SeccompProfile,
@@ -665,13 +668,14 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		}
 		args = append(args, "--label", key+"="+value)
 	}
-	envKeys := make([]string, 0, len(job.Env))
-	for key := range job.Env {
+	containerEnv := normalizedContainerEnv(job)
+	envKeys := make([]string, 0, len(containerEnv))
+	for key := range containerEnv {
 		envKeys = append(envKeys, key)
 	}
 	sort.Strings(envKeys)
 	for _, key := range envKeys {
-		value := job.Env[key]
+		value := containerEnv[key]
 		args = append(args, "--env", key+"="+value)
 	}
 	for _, port := range normalizedPortPlans(job) {
@@ -736,6 +740,8 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 		},
 		ImageDigest:     job.ImageDigest,
 		ResolvedImage:   resolvedContainerImage(job),
+		Command:         job.Command,
+		Env:             normalizedContainerEnv(job),
 		SeccompProfile:  job.Security.SeccompProfile,
 		AppArmorProfile: job.Security.AppArmorProfile,
 		Egress: EgressPolicy{
@@ -769,6 +775,17 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 	plan.Commands = append(plan.Commands, plan.ContainerRemove)
 	plan.Commands = append(plan.Commands, plan.ContainerRun)
 	return plan, nil
+}
+
+func normalizedContainerEnv(job DeployJob) map[string]string {
+	env := make(map[string]string, len(job.Env)+3)
+	for key, value := range job.Env {
+		env[key] = value
+	}
+	env["LUMA_DEPLOYMENT_ID"] = job.DeploymentID
+	env["LUMA_TENANT_ID"] = job.TenantID
+	env["LUMA_NODE_ID"] = job.NodeID
+	return env
 }
 
 func firewallCommands(job DeployJob) []CommandPlan {
