@@ -64,6 +64,7 @@ type RuntimeStatus struct {
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
+	DockerOSTypeLinux            bool              `json:"dockerOSTypeLinux"`
 	DockerLocalEndpoint          bool              `json:"dockerLocalEndpoint"`
 	DockerSocketProtected        bool              `json:"dockerSocketProtected"`
 	Nftables                     bool              `json:"nftables"`
@@ -812,6 +813,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerServerVersion"] = "docker server version must be 24.0.0 or newer"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.OSType}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerOSType"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerOSType"] == "" {
+				status.Errors["dockerOSType"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "linux") {
+			status.DockerOSTypeLinux = true
+		} else {
+			status.Errors["dockerOSType"] = "docker OS type must be linux"
+		}
 		endpoint, err := dockerEndpoint(ctx)
 		if err != nil {
 			status.Errors["dockerEndpoint"] = err.Error()
@@ -857,7 +869,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
