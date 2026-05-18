@@ -907,6 +907,16 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid Docker label",
 		},
 		{
+			name: "docker label key with space",
+			edit: func(job *DeployJob) { job.Labels["bad key"] = "value" },
+			want: "invalid Docker label",
+		},
+		{
+			name: "docker label key with separator edge",
+			edit: func(job *DeployJob) { job.Labels["bad."] = "value" },
+			want: "invalid Docker label",
+		},
+		{
 			name: "docker label value with control character",
 			edit: func(job *DeployJob) { job.Labels["safe.label"] = "value\twith-tab" },
 			want: "invalid Docker label",
