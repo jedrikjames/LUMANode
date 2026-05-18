@@ -1229,6 +1229,10 @@ if [ "$1" = "info" ]; then
     echo true
     exit 0
   fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo overlay2
     exit 0
@@ -1253,10 +1257,11 @@ exit 0
 	writeFakeCommand(t, tempDir, "nft", "#!/bin/sh\nexit 0\n")
 	previousPath := os.Getenv("PATH")
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1304,6 +1309,10 @@ if [ "$1" = "info" ]; then
     echo true
     exit 0
   fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo overlay2
     exit 0
@@ -1329,6 +1338,7 @@ exit 0
 	previousPath := os.Getenv("PATH")
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
 	t.Setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
@@ -1389,6 +1399,10 @@ if [ "$1" = "info" ]; then
     echo true
     exit 0
   fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo overlay2
     exit 0
@@ -1418,6 +1432,7 @@ exit 0
 	previousPath := os.Getenv("PATH")
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
 	t.Setenv("DOCKER_SOCKET_PATH", socketPath)
+	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
@@ -1426,6 +1441,93 @@ exit 0
 	}
 	if status.Errors["dockerSocket"] == "" {
 		t.Fatalf("expected Docker socket error, got %#v", status.Errors)
+	}
+}
+
+func TestRuntimeStatusRejectsWorldWritableDockerRootDir(t *testing.T) {
+	tempDir := t.TempDir()
+	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+		t.Fatalf("write cgroup controllers: %v", err)
+	}
+	rootDir := filepath.Join(tempDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o777); err != nil {
+		t.Fatalf("create docker root dir: %v", err)
+	}
+	if err := os.Chmod(rootDir, 0o777); err != nil {
+		t.Fatalf("chmod docker root dir: %v", err)
+	}
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "info" ]; then
+  if [ "$3" = "{{json .SecurityOptions}}" ]; then
+    echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
+    exit 0
+  fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo systemd
+    exit 0
+  fi
+  if [ "$3" = "{{.Debug}}" ]; then
+    echo false
+    exit 0
+  fi
+  if [ "$3" = "{{.Swarm.LocalNodeState}}" ]; then
+    echo inactive
+    exit 0
+  fi
+  if [ "$3" = "{{.OomKillDisable}}" ]; then
+    echo false
+    exit 0
+  fi
+  if [ "$3" = "{{.BridgeNfIptables}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.BridgeNfIp6tables}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
+    echo true
+    exit 0
+  fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
+  if [ "$3" = "{{.Driver}}" ]; then
+    echo overlay2
+    exit 0
+  fi
+  if [ "$3" = "{{json .DriverStatus}}" ]; then
+    echo '[["Backing Filesystem","extfs"],["Supports d_type","true"],["Native Overlay Diff","true"]]'
+    exit 0
+  fi
+  echo 2
+  exit 0
+fi
+if [ "$1" = "version" ]; then
+  if [ "$3" = "{{.Server.Experimental}}" ]; then
+    echo false
+    exit 0
+  fi
+  echo 25.0.3
+  exit 0
+fi
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", "#!/bin/sh\nexit 0\n")
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_ROOT_DIR", rootDir)
+
+	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
+	status := agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerRootDirProtected {
+		t.Fatalf("expected world-writable Docker root directory to fail runtime readiness, got %#v", status)
+	}
+	if status.Errors["dockerRootDir"] == "" {
+		t.Fatalf("expected Docker root directory error, got %#v", status.Errors)
 	}
 }
 
@@ -1469,6 +1571,10 @@ if [ "$1" = "info" ]; then
     echo false
     exit 0
   fi
+  if [ "$3" = "{{.DockerRootDir}}" ]; then
+    echo "$DOCKER_ROOT_DIR"
+    exit 0
+  fi
   if [ "$3" = "{{.Driver}}" ]; then
     echo aufs
     exit 0
@@ -1489,13 +1595,14 @@ exit 0
 	writeFakeCommand(t, tempDir, "nft", "#!/bin/sh\nexit 0\n")
 	previousPath := os.Getenv("PATH")
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerOomKillEnabled || status.DockerBridgeNfIptables || status.DockerBridgeNfIp6tables || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerOomKillEnabled || status.DockerBridgeNfIptables || status.DockerBridgeNfIp6tables || status.DockerLiveRestore || !status.DockerRootDirProtected || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
 		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
 	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerOomKill"] == "" || status.Errors["dockerBridgeNfIptables"] == "" || status.Errors["dockerBridgeNfIp6tables"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {

@@ -59,6 +59,7 @@ type RuntimeStatus struct {
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
+	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
@@ -751,6 +752,19 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerLiveRestore"] = "docker daemon live-restore is not enabled"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DockerRootDir}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerRootDir"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerRootDir"] == "" {
+				status.Errors["dockerRootDir"] = err.Error()
+			}
+		} else if protected, err := dockerRootDirProtected(strings.TrimSpace(string(output))); err != nil {
+			status.Errors["dockerRootDir"] = err.Error()
+		} else if protected {
+			status.DockerRootDirProtected = true
+		} else {
+			status.Errors["dockerRootDir"] = "docker root directory must not be world-writable"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Driver}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerStorageOverlay2"] = strings.TrimSpace(string(output))
@@ -816,7 +830,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -861,6 +875,24 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	}
 	if info.Mode()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
+	}
+	return info.Mode().Perm()&0o002 == 0, nil
+}
+
+func dockerRootDirProtected(rootDir string) (bool, error) {
+	rootDir = strings.TrimSpace(rootDir)
+	if rootDir == "" {
+		return false, fmt.Errorf("docker root directory is empty")
+	}
+	if !filepath.IsAbs(rootDir) {
+		return false, fmt.Errorf("docker root directory %q is not absolute", rootDir)
+	}
+	info, err := os.Stat(rootDir)
+	if err != nil {
+		return false, fmt.Errorf("docker root directory stat failed: %w", err)
+	}
+	if !info.IsDir() {
+		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
 	return info.Mode().Perm()&0o002 == 0, nil
 }
