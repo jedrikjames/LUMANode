@@ -1201,6 +1201,10 @@ if [ "$1" = "info" ]; then
     echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
     exit 0
   fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo systemd
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo true
     exit 0
@@ -1228,7 +1232,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerLiveRestore || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.CgroupV2 {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1246,6 +1250,10 @@ func TestRuntimeStatusRejectsRemoteDockerEndpoint(t *testing.T) {
 if [ "$1" = "info" ]; then
   if [ "$3" = "{{json .SecurityOptions}}" ]; then
     echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
+    exit 0
+  fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo systemd
     exit 0
   fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
@@ -1305,6 +1313,10 @@ if [ "$1" = "info" ]; then
     echo '["name=apparmor","name=seccomp,profile=default","name=cgroupns","name=userns"]'
     exit 0
   fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo systemd
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo true
     exit 0
@@ -1357,6 +1369,10 @@ if [ "$1" = "info" ]; then
     echo '["name=cgroupns"]'
     exit 0
   fi
+  if [ "$3" = "{{.CgroupDriver}}" ]; then
+    echo cgroupfs
+    exit 0
+  fi
   if [ "$3" = "{{.LiveRestoreEnabled}}" ]; then
     echo false
     exit 0
@@ -1383,10 +1399,10 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerLiveRestore || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported {
 		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
 	}
 }
