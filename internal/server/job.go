@@ -251,6 +251,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if !validEnvironmentVariable(key, value) {
 			return fmt.Errorf("deployment job has invalid environment variable")
 		}
+		if reservedEnvironmentOverride(job, key, value) {
+			return fmt.Errorf("deployment job cannot override reserved LUMA environment variables")
+		}
 	}
 	tenantRoot := filepath.Clean(filepath.Join("/srv/lumapanel/tenants", job.TenantID)) + string(filepath.Separator)
 	if len(job.Mounts) > maxContainerMounts {
@@ -323,6 +326,19 @@ func reservedLabelOverride(job DeployJob, key string, value string) bool {
 	case "luma.tenant":
 		return value != job.TenantID
 	case "luma.node":
+		return value != job.NodeID
+	default:
+		return false
+	}
+}
+
+func reservedEnvironmentOverride(job DeployJob, key string, value string) bool {
+	switch key {
+	case "LUMA_DEPLOYMENT_ID":
+		return value != job.DeploymentID
+	case "LUMA_TENANT_ID":
+		return value != job.TenantID
+	case "LUMA_NODE_ID":
 		return value != job.NodeID
 	default:
 		return false

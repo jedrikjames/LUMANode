@@ -952,6 +952,21 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "too many environment variables",
 		},
 		{
+			name: "reserved tenant environment override",
+			edit: func(job *DeployJob) { job.Env["LUMA_TENANT_ID"] = "tenant_other" },
+			want: "reserved LUMA environment variables",
+		},
+		{
+			name: "reserved deployment environment override",
+			edit: func(job *DeployJob) { job.Env["LUMA_DEPLOYMENT_ID"] = "dep_other" },
+			want: "reserved LUMA environment variables",
+		},
+		{
+			name: "reserved node environment override",
+			edit: func(job *DeployJob) { job.Env["LUMA_NODE_ID"] = "node_other" },
+			want: "reserved LUMA environment variables",
+		},
+		{
 			name: "too many mounts",
 			edit: func(job *DeployJob) {
 				job.Mounts = nil
