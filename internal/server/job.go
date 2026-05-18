@@ -18,6 +18,8 @@ import (
 const defaultContainerPidsLimit = 512
 const defaultContainerUser = "10000:10000"
 const defaultContainerUsernsMode = "private"
+const defaultContainerPidMode = "private"
+const defaultContainerUTSMode = "private"
 const defaultContainerStopTimeoutSeconds = 30
 const defaultContainerHealthInterval = "30s"
 const defaultContainerHealthTimeout = "5s"
@@ -581,6 +583,8 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--ipc", "none",
 		"--cgroupns", "private",
 		"--userns", defaultContainerUsernsMode,
+		"--pid", defaultContainerPidMode,
+		"--uts", defaultContainerUTSMode,
 		"--stop-timeout", strconv.Itoa(defaultContainerStopTimeoutSeconds),
 		"--restart", "no",
 		"--oom-kill-disable=false",

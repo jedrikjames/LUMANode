@@ -1390,14 +1390,14 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container isolation inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 27 {
+	if len(fields) < 29 {
 		return fmt.Errorf("docker container %q isolation inspect returned incomplete data", plan.ContainerName)
 	}
 	if fields[0] != "false" {
@@ -1415,61 +1415,64 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if fields[5] != defaultContainerUsernsMode {
 		return fmt.Errorf("docker container %q did not keep private user namespace isolation", plan.ContainerName)
 	}
-	if fields[6] != "no" {
+	if fields[6] != defaultContainerPidMode || fields[7] != defaultContainerUTSMode {
+		return fmt.Errorf("docker container %q did not keep private PID/UTS namespace isolation", plan.ContainerName)
+	}
+	if fields[8] != "no" {
 		return fmt.Errorf("docker container %q did not keep restart policy disabled", plan.ContainerName)
 	}
-	if fields[7] != "true" {
+	if fields[9] != "true" {
 		return fmt.Errorf("docker container %q did not keep init process enabled", plan.ContainerName)
 	}
-	if fields[8] != strconv.Itoa(defaultContainerStopTimeoutSeconds) {
+	if fields[10] != strconv.Itoa(defaultContainerStopTimeoutSeconds) {
 		return fmt.Errorf("docker container %q did not keep expected stop timeout", plan.ContainerName)
 	}
-	if fields[9] != "false" {
+	if fields[11] != "false" {
 		return fmt.Errorf("docker container %q did not keep automatic removal disabled", plan.ContainerName)
 	}
-	if fields[10] != "false" {
+	if fields[12] != "false" {
 		return fmt.Errorf("docker container %q did not keep publish-all-ports disabled", plan.ContainerName)
 	}
-	if fields[11] != "false" {
+	if fields[13] != "false" {
 		return fmt.Errorf("docker container %q did not keep OOM killing enabled", plan.ContainerName)
 	}
-	if fields[12] != networkName {
-		return fmt.Errorf("docker container %q attached to unexpected network %q", plan.ContainerName, fields[12])
+	if fields[14] != networkName {
+		return fmt.Errorf("docker container %q attached to unexpected network %q", plan.ContainerName, fields[14])
 	}
-	networkCount, err := strconv.Atoi(fields[16])
+	networkCount, err := strconv.Atoi(fields[18])
 	if err != nil || networkCount != 1 {
 		return fmt.Errorf("docker container %q has unexpected network attachment count", plan.ContainerName)
 	}
-	attachedNetworks := strings.Split(fields[17], ",")
+	attachedNetworks := strings.Split(fields[19], ",")
 	if !containsNetworkName(attachedNetworks, networkName) {
 		return fmt.Errorf("docker container %q is missing expected tenant network attachment", plan.ContainerName)
 	}
-	if !containerPortBindingsMatch(plan.Ports, fields[18]) {
+	if !containerPortBindingsMatch(plan.Ports, fields[20]) {
 		return fmt.Errorf("docker container %q did not keep expected port bindings", plan.ContainerName)
 	}
-	if fields[19] != "none" {
+	if fields[21] != "none" {
 		return fmt.Errorf("docker container %q has unexpected Docker links", plan.ContainerName)
 	}
-	if fields[20] != "none" {
+	if fields[22] != "none" {
 		return fmt.Errorf("docker container %q has unexpected extra host aliases", plan.ContainerName)
 	}
-	if fields[21] != "none" || fields[22] != "none" || fields[23] != "none" {
+	if fields[23] != "none" || fields[24] != "none" || fields[25] != "none" {
 		return fmt.Errorf("docker container %q has unexpected DNS overrides", plan.ContainerName)
 	}
-	if fields[24] != "none" || fields[25] != "none" {
+	if fields[26] != "none" || fields[27] != "none" {
 		return fmt.Errorf("docker container %q has unexpected hostname overrides", plan.ContainerName)
 	}
-	if fields[26] != "none" {
+	if fields[28] != "none" {
 		return fmt.Errorf("docker container %q has unexpected MAC address override", plan.ContainerName)
 	}
-	if fields[13] != defaultContainerUser {
+	if fields[15] != defaultContainerUser {
 		return fmt.Errorf("docker container %q did not keep expected non-root user", plan.ContainerName)
 	}
-	capDrops := strings.Split(fields[14], ",")
+	capDrops := strings.Split(fields[16], ",")
 	if !containsCapability(capDrops, "ALL") {
 		return fmt.Errorf("docker container %q did not keep drop-all capability policy", plan.ContainerName)
 	}
-	securityOpts := strings.Split(fields[15], ",")
+	securityOpts := strings.Split(fields[17], ",")
 	if !containsSecurityOpt(securityOpts, "no-new-privileges=true") ||
 		!containsSecurityOpt(securityOpts, "seccomp="+plan.SeccompProfile) ||
 		!containsSecurityOpt(securityOpts, "apparmor="+plan.AppArmorProfile) {
