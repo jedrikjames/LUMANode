@@ -31,6 +31,8 @@ const defaultContainerShmSize = "64m"
 const defaultContainerShmBytes = 64 * 1024 * 1024
 const defaultContainerLogMaxSize = "10m"
 const defaultContainerLogMaxFile = "3"
+const defaultContainerLogMode = "non-blocking"
+const defaultContainerLogMaxBufferSize = "4m"
 const maxContainerCPUCores = 128
 const maxContainerMemoryMB = 1048576
 const maxContainerDiskGB = 10240
@@ -583,6 +585,8 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--log-driver", "json-file",
 		"--log-opt", "max-size=" + defaultContainerLogMaxSize,
 		"--log-opt", "max-file=" + defaultContainerLogMaxFile,
+		"--log-opt", "mode=" + defaultContainerLogMode,
+		"--log-opt", "max-buffer-size=" + defaultContainerLogMaxBufferSize,
 		"--user", defaultContainerUser,
 		"--init",
 		"--ipc", "none",

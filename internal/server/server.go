@@ -1643,14 +1643,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container resource inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 14 {
+	if len(fields) < 16 {
 		return fmt.Errorf("docker container %q resource inspect returned incomplete data", plan.ContainerName)
 	}
 	expectedNanoCpus := int64(math.Round(plan.Resources.CPUCores * 1_000_000_000))
@@ -1672,16 +1672,16 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if shmErr != nil || shmBytes != defaultContainerShmBytes {
 		return fmt.Errorf("docker container %q did not keep expected shared memory size", plan.ContainerName)
 	}
-	if fields[5] != "json-file" || fields[6] != defaultContainerLogMaxSize || fields[7] != defaultContainerLogMaxFile {
+	if fields[5] != "json-file" || fields[6] != defaultContainerLogMaxSize || fields[7] != defaultContainerLogMaxFile || fields[8] != defaultContainerLogMode || fields[9] != defaultContainerLogMaxBufferSize {
 		return fmt.Errorf("docker container %q did not keep expected log rotation settings", plan.ContainerName)
 	}
-	if fields[8] != "0" {
+	if fields[10] != "0" {
 		return fmt.Errorf("docker container %q has unexpected memory reservation", plan.ContainerName)
 	}
-	if fields[9] != "0" || fields[10] != "0" || fields[11] != "0" {
+	if fields[11] != "0" || fields[12] != "0" || fields[13] != "0" {
 		return fmt.Errorf("docker container %q has unexpected CPU scheduler overrides", plan.ContainerName)
 	}
-	if fields[12] != "none" || fields[13] != "none" {
+	if fields[14] != "none" || fields[15] != "none" {
 		return fmt.Errorf("docker container %q has unexpected CPU set restrictions", plan.ContainerName)
 	}
 	return nil

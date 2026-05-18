@@ -92,6 +92,10 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"max-size=10m",
 		"--log-opt",
 		"max-file=3",
+		"--log-opt",
+		"mode=non-blocking",
+		"--log-opt",
+		"max-buffer-size=4m",
 		"--user",
 		"10000:10000",
 		"--init",
@@ -2249,7 +2253,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2341,7 +2345,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2430,7 +2434,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2520,7 +2524,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2599,7 +2603,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2697,7 +2701,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3256,7 +3260,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3334,7 +3338,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3432,7 +3436,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3510,7 +3514,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3594,7 +3598,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1000000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none none"
+      echo "1000000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3657,7 +3661,7 @@ func TestVerifyStartedContainerResourcesRequiresSharedMemorySize(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo "1500000000 536870912 536870912 5g 33554432 json-file 10m 3 0 0 0 0 none none"
+  echo "1500000000 536870912 536870912 5g 33554432 json-file 10m 3 non-blocking 4m 0 0 0 0 none none"
   exit 0
 fi
 exit 1
@@ -3673,6 +3677,49 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerResourcesRequiresLogBackpressurePolicy(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+	}{
+		{
+			name:   "driver",
+			output: "1500000000 536870912 536870912 5g 67108864 local 10m 3 non-blocking 4m 0 0 0 0 none none",
+		},
+		{
+			name:   "max-size",
+			output: "1500000000 536870912 536870912 5g 67108864 json-file 100m 3 non-blocking 4m 0 0 0 0 none none",
+		},
+		{
+			name:   "max-file",
+			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 10 non-blocking 4m 0 0 0 0 none none",
+		},
+		{
+			name:   "mode",
+			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 blocking 4m 0 0 0 0 none none",
+		},
+		{
+			name:   "max-buffer-size",
+			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 32m 0 0 0 0 none none",
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", "#!/bin/sh\nif [ \"$1\" = \"inspect\" ]; then\n  echo \""+tt.output+"\"\n  exit 0\nfi\nexit 1\n")
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			plan, err := deploymentPlan(sampleJob())
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainerResources(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), "log rotation settings") {
+				t.Fatalf("expected log policy verification failure, got %v", err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerResourcesRejectsSchedulerOverrides(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -3681,32 +3728,32 @@ func TestVerifyStartedContainerResourcesRejectsSchedulerOverrides(t *testing.T) 
 	}{
 		{
 			name:     "memory-reservation",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 268435456 0 0 0 none none",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 268435456 0 0 0 none none",
 			contains: "memory reservation",
 		},
 		{
 			name:     "cpu-shares",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 1024 0 0 none none",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 1024 0 0 none none",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpu-quota",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 100000 0 none none",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 100000 0 none none",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpu-period",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 100000 none none",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 100000 none none",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpuset-cpus",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 0-1 none",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 0-1 none",
 			contains: "CPU set restrictions",
 		},
 		{
 			name:     "cpuset-mems",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 0 0 0 0 none 0",
+			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none 0",
 			contains: "CPU set restrictions",
 		},
 	}
