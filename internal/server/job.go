@@ -40,6 +40,7 @@ const maxContainerPortMappings = 256
 const maxContainerMounts = 64
 const maxContainerEnvVars = 128
 const maxContainerEnvValueLength = 4096
+const maxContainerLabels = 128
 const maxEgressPolicyRules = 256
 
 type DeployJob struct {
@@ -292,6 +293,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 	}
 	if !validConfinementProfile(job.Security.SeccompProfile) || !validConfinementProfile(job.Security.AppArmorProfile) {
 		return fmt.Errorf("deployment job must set seccomp and AppArmor profiles")
+	}
+	if len(job.Labels) > maxContainerLabels {
+		return fmt.Errorf("deployment job has too many Docker labels")
 	}
 	for key, value := range job.Labels {
 		if !validDockerLabel(key, value) {
@@ -617,13 +621,25 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 	for _, capability := range job.Security.DroppedCapabilities {
 		args = append(args, "--cap-drop", capability)
 	}
-	for key, value := range job.Labels {
+	labelKeys := make([]string, 0, len(job.Labels))
+	for key := range job.Labels {
+		labelKeys = append(labelKeys, key)
+	}
+	sort.Strings(labelKeys)
+	for _, key := range labelKeys {
+		value := job.Labels[key]
 		if lumaOwnershipLabel(key) {
 			continue
 		}
 		args = append(args, "--label", key+"="+value)
 	}
-	for key, value := range job.Env {
+	envKeys := make([]string, 0, len(job.Env))
+	for key := range job.Env {
+		envKeys = append(envKeys, key)
+	}
+	sort.Strings(envKeys)
+	for _, key := range envKeys {
+		value := job.Env[key]
 		args = append(args, "--env", key+"="+value)
 	}
 	for _, port := range job.Ports {

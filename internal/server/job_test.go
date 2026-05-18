@@ -208,6 +208,28 @@ func TestDockerRunArgsCleansMountPaths(t *testing.T) {
 	}
 }
 
+func TestDockerRunArgsOrdersUserLabelsAndEnvironment(t *testing.T) {
+	job := sampleJob()
+	job.Labels["z.example"] = "last"
+	job.Labels["a.example"] = "first"
+	job.Env["Z_ENV"] = "last"
+	job.Env["A_ENV"] = "first"
+	args, err := dockerRunArgs(job)
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	aLabel := slices.Index(args, "a.example=first")
+	zLabel := slices.Index(args, "z.example=last")
+	aEnv := slices.Index(args, "A_ENV=first")
+	zEnv := slices.Index(args, "Z_ENV=last")
+	if aLabel < 0 || zLabel < 0 || aLabel > zLabel {
+		t.Fatalf("expected user labels to be sorted in docker args, got %#v", args)
+	}
+	if aEnv < 0 || zEnv < 0 || aEnv > zEnv {
+		t.Fatalf("expected environment variables to be sorted in docker args, got %#v", args)
+	}
+}
+
 func TestDockerRunArgsRejectsIncompleteJob(t *testing.T) {
 	_, err := dockerRunArgs(DeployJob{})
 	if err == nil {
@@ -888,6 +910,15 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			name: "docker label value with control character",
 			edit: func(job *DeployJob) { job.Labels["safe.label"] = "value\twith-tab" },
 			want: "invalid Docker label",
+		},
+		{
+			name: "too many docker labels",
+			edit: func(job *DeployJob) {
+				for i := 0; i <= maxContainerLabels; i++ {
+					job.Labels[fmt.Sprintf("example.label.%d", i)] = "value"
+				}
+			},
+			want: "too many Docker labels",
 		},
 		{
 			name: "invalid egress mode",
