@@ -190,7 +190,7 @@ func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Tim
 }
 
 func validateDeploymentJob(job DeployJob, nodeID string) error {
-	if job.ID == "" || job.DeploymentID == "" || job.TenantID == "" || job.Image == "" {
+	if job.ID == "" || job.DeploymentID == "" || job.TenantID == "" || job.NodeID == "" || job.Image == "" {
 		return fmt.Errorf("missing required deployment job identity")
 	}
 	if !validImageReference(job.Image) {

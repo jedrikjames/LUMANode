@@ -685,6 +685,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "not this node",
 		},
 		{
+			name: "missing node identifier",
+			edit: func(job *DeployJob) { job.NodeID = "" },
+			want: "missing required deployment job identity",
+		},
+		{
 			name: "unsafe deployment identifier",
 			edit: func(job *DeployJob) { job.DeploymentID = "dep_test;rm" },
 			want: "invalid identifiers",
