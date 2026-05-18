@@ -307,13 +307,15 @@ func reservedLabelOverride(job DeployJob, key string, value string) bool {
 		return value != job.DeploymentID
 	case "luma.tenant":
 		return value != job.TenantID
+	case "luma.node":
+		return value != job.NodeID
 	default:
 		return false
 	}
 }
 
 func lumaOwnershipLabel(key string) bool {
-	return key == "luma.managed" || key == "luma.deployment" || key == "luma.tenant"
+	return key == "luma.managed" || key == "luma.deployment" || key == "luma.tenant" || key == "luma.node"
 }
 
 func validDockerLabel(key string, value string) bool {
@@ -556,6 +558,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--label", "luma.managed=true",
 		"--label", "luma.deployment=" + job.DeploymentID,
 		"--label", "luma.tenant=" + job.TenantID,
+		"--label", "luma.node=" + job.NodeID,
 	}
 	if job.Security.ReadOnlyRootFS {
 		args = append(args, "--read-only")

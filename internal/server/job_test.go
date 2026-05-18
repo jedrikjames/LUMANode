@@ -838,6 +838,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved LUMA labels",
 		},
 		{
+			name: "reserved node label override",
+			edit: func(job *DeployJob) { job.Labels["luma.node"] = "node_other" },
+			want: "reserved LUMA labels",
+		},
+		{
 			name: "invalid docker label",
 			edit: func(job *DeployJob) { job.Labels["bad\nkey"] = "value" },
 			want: "invalid Docker label",
