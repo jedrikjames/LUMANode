@@ -53,6 +53,8 @@ type RuntimeStatus struct {
 	DockerExperimentalDisabled   bool              `json:"dockerExperimentalDisabled"`
 	DockerSwarmInactive          bool              `json:"dockerSwarmInactive"`
 	DockerOomKillEnabled         bool              `json:"dockerOomKillEnabled"`
+	DockerBridgeNfIptables       bool              `json:"dockerBridgeNfIptables"`
+	DockerBridgeNfIp6tables      bool              `json:"dockerBridgeNfIp6tables"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -692,6 +694,28 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerOomKill"] = "docker daemon OOM kill disable must be false"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.BridgeNfIptables}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerBridgeNfIptables"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerBridgeNfIptables"] == "" {
+				status.Errors["dockerBridgeNfIptables"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "true") {
+			status.DockerBridgeNfIptables = true
+		} else {
+			status.Errors["dockerBridgeNfIptables"] = "docker bridge netfilter iptables hook must be enabled"
+		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.BridgeNfIp6tables}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerBridgeNfIp6tables"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerBridgeNfIp6tables"] == "" {
+				status.Errors["dockerBridgeNfIp6tables"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "true") {
+			status.DockerBridgeNfIp6tables = true
+		} else {
+			status.Errors["dockerBridgeNfIp6tables"] = "docker bridge netfilter ip6tables hook must be enabled"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -792,7 +816,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 	} else {
 		status.CgroupV2 = true
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.CgroupV2
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
