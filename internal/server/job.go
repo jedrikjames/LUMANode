@@ -480,7 +480,7 @@ func validConfinementProfile(profile string) bool {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
 			continue
 		}
-		if r == '.' || r == '_' || r == '-' || r == '/' {
+		if r == '.' || r == '_' || r == '-' {
 			continue
 		}
 		return false

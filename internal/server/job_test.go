@@ -839,6 +839,16 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "seccomp and AppArmor",
 		},
 		{
+			name: "path traversal seccomp profile",
+			edit: func(job *DeployJob) { job.Security.SeccompProfile = "../lumapanel-default" },
+			want: "seccomp and AppArmor",
+		},
+		{
+			name: "absolute apparmor profile path",
+			edit: func(job *DeployJob) { job.Security.AppArmorProfile = "/lumapanel-tenant" },
+			want: "seccomp and AppArmor",
+		},
+		{
 			name: "reserved LUMA label override",
 			edit: func(job *DeployJob) { job.Labels["luma.managed"] = "false" },
 			want: "reserved LUMA labels",
