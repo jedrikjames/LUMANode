@@ -690,6 +690,24 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid identifiers",
 		},
 		{
+			name: "leading separator deployment identifier",
+			edit: func(job *DeployJob) { job.DeploymentID = "-dep_test" },
+			want: "invalid identifiers",
+		},
+		{
+			name: "trailing separator tenant identifier",
+			edit: func(job *DeployJob) {
+				job.TenantID = "tenant_demo_"
+				job.Network.Name = "luma-" + job.TenantID
+			},
+			want: "invalid identifiers",
+		},
+		{
+			name: "doubled separator node identifier",
+			edit: func(job *DeployJob) { job.NodeID = "node__local" },
+			want: "invalid identifiers",
+		},
+		{
 			name: "unsafe tenant identifier",
 			edit: func(job *DeployJob) {
 				job.TenantID = "../tenant_demo"

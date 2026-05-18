@@ -438,16 +438,22 @@ func validLumaIdentifier(value string) bool {
 	if value == "" || len(value) > 80 {
 		return false
 	}
+	previousSeparator := false
 	for _, r := range value {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			previousSeparator = false
 			continue
 		}
 		if r == '_' || r == '-' {
+			if previousSeparator {
+				return false
+			}
+			previousSeparator = true
 			continue
 		}
 		return false
 	}
-	return true
+	return !previousSeparator && value[0] != '_' && value[0] != '-'
 }
 
 func containsCapability(capabilities []string, target string) bool {
