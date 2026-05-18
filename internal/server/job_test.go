@@ -778,6 +778,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid environment variable",
 		},
 		{
+			name: "environment value with control character",
+			edit: func(job *DeployJob) { job.Env["SAFE_KEY"] = "value\twith-tab" },
+			want: "invalid environment variable",
+		},
+		{
 			name: "too many environment variables",
 			edit: func(job *DeployJob) {
 				for i := 0; i <= maxContainerEnvVars; i++ {

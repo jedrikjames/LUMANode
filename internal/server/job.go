@@ -345,7 +345,7 @@ func validEnvironmentVariable(key string, value string) bool {
 		}
 	}
 	for _, r := range value {
-		if r == 0 || r == '\r' || r == '\n' {
+		if r < 0x20 || r == 0x7f {
 			return false
 		}
 	}
