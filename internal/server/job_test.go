@@ -3735,6 +3735,64 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
+	cases := []struct {
+		name     string
+		mounts   string
+		contains string
+	}{
+		{
+			name:     "volume",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"volume","Source":"/var/lib/docker/volumes/cache/_data","Destination":"/cache","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected mount type "volume"`,
+		},
+		{
+			name:     "extra tmpfs",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/var/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected tmpfs mount target "/var/tmp"`,
+		},
+		{
+			name:     "readonly tmpfs",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":false,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `tmpfs mount "/tmp" writable`,
+		},
+		{
+			name:     "duplicate bind",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/other","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `duplicate mount target "/data"`,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo %q
+      exit 0
+      ;;
+  esac
+fi
+exit 1
+`, tt.mounts))
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			plan, err := deploymentPlan(sampleJob())
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainerMounts(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected %q mount verification failure, got %v", tt.contains, err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerMountsRequiresTmpfsConfig(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh

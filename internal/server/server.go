@@ -1654,17 +1654,24 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 	expectedTmpfsTargets := map[string]bool{"/tmp": false, "/run": false}
 	for _, mount := range mounts {
 		if mount.Type == "tmpfs" {
-			if _, ok := expectedTmpfsTargets[mount.Destination]; ok && mount.RW {
-				expectedTmpfsTargets[mount.Destination] = true
+			if _, ok := expectedTmpfsTargets[mount.Destination]; !ok {
+				return fmt.Errorf("docker container %q has unexpected tmpfs mount target %q", plan.ContainerName, mount.Destination)
 			}
+			if !mount.RW {
+				return fmt.Errorf("docker container %q did not keep expected tmpfs mount %q writable", plan.ContainerName, mount.Destination)
+			}
+			expectedTmpfsTargets[mount.Destination] = true
 			continue
 		}
 		if mount.Type != "bind" {
-			continue
+			return fmt.Errorf("docker container %q has unexpected mount type %q at %q", plan.ContainerName, mount.Type, mount.Destination)
 		}
 		expected, ok := expectedByTarget[mount.Destination]
 		if !ok {
 			return fmt.Errorf("docker container %q has unexpected mount target %q", plan.ContainerName, mount.Destination)
+		}
+		if seenTargets[mount.Destination] {
+			return fmt.Errorf("docker container %q has duplicate mount target %q", plan.ContainerName, mount.Destination)
 		}
 		if filepath.Clean(mount.Source) != expected.Source || mount.RW == expected.ReadOnly || mount.Propagation != "rprivate" {
 			return fmt.Errorf("docker container %q did not keep expected bind mount policy", plan.ContainerName)
