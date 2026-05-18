@@ -650,6 +650,23 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "mount escapes tenant root",
 		},
 		{
+			name: "mount source with docker option separator",
+			edit: func(job *DeployJob) {
+				job.Mounts[0].Source = "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/data,ro"
+			},
+			want: "invalid mount path",
+		},
+		{
+			name: "mount target with docker option separator",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/data,ro" },
+			want: "invalid mount path",
+		},
+		{
+			name: "mount target with control character",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/data\tlogs" },
+			want: "invalid mount path",
+		},
+		{
 			name: "relative mount target",
 			edit: func(job *DeployJob) { job.Mounts[0].Target = "data" },
 			want: "mount target must be absolute",

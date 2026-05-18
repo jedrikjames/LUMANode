@@ -237,10 +237,16 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 	mountTargets := map[string]struct{}{}
 	for _, mount := range job.Mounts {
 		source := filepath.Clean(mount.Source)
+		if !validDockerMountPath(source) {
+			return fmt.Errorf("deployment job has invalid mount path")
+		}
 		if !filepath.IsAbs(source) || !strings.HasPrefix(source+string(filepath.Separator), tenantRoot) {
 			return fmt.Errorf("deployment job mount escapes tenant root")
 		}
 		target := filepath.Clean(mount.Target)
+		if !validDockerMountPath(target) {
+			return fmt.Errorf("deployment job has invalid mount path")
+		}
 		if !filepath.IsAbs(target) {
 			return fmt.Errorf("deployment job mount target must be absolute")
 		}
@@ -408,6 +414,18 @@ func mountTargetsOverlap(left string, right string) bool {
 	left = filepath.Clean(left)
 	right = filepath.Clean(right)
 	return left == right || strings.HasPrefix(left, right+"/") || strings.HasPrefix(right, left+"/")
+}
+
+func validDockerMountPath(path string) bool {
+	if path == "" || strings.Contains(path, ",") {
+		return false
+	}
+	for _, r := range path {
+		if r < 0x20 || r == 0x7f {
+			return false
+		}
+	}
+	return true
 }
 
 func validConfinementProfile(profile string) bool {
