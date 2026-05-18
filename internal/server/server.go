@@ -1478,7 +1478,14 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 		expectedByTarget[mount.Target] = mount
 	}
 	seenTargets := map[string]bool{}
+	expectedTmpfsTargets := map[string]bool{"/tmp": false, "/run": false}
 	for _, mount := range mounts {
+		if mount.Type == "tmpfs" {
+			if _, ok := expectedTmpfsTargets[mount.Destination]; ok && mount.RW {
+				expectedTmpfsTargets[mount.Destination] = true
+			}
+			continue
+		}
 		if mount.Type != "bind" {
 			continue
 		}
@@ -1493,6 +1500,11 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 	}
 	if len(seenTargets) != len(expectedByTarget) {
 		return fmt.Errorf("docker container %q has unexpected mount count", plan.ContainerName)
+	}
+	for target, seen := range expectedTmpfsTargets {
+		if !seen {
+			return fmt.Errorf("docker container %q did not keep expected tmpfs mount %q", plan.ContainerName, target)
+		}
 	}
 	return nil
 }

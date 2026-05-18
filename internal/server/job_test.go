@@ -2054,7 +2054,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2146,7 +2146,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2235,7 +2235,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2325,7 +2325,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2404,7 +2404,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2482,7 +2482,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2560,7 +2560,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2638,7 +2638,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":false,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":false,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2701,6 +2701,26 @@ exit 0
 	}
 }
 
+func TestVerifyStartedContainerMountsRequiresTmpfsScratchPaths(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""}]'
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerMounts(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), `tmpfs mount "/run"`) {
+		t.Fatalf("expected missing /run tmpfs drift failure, got %v", err)
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithSecurityProfileDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
@@ -2716,7 +2736,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2794,7 +2814,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
@@ -2878,7 +2898,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .Mounts*)
-      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"}]'
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
