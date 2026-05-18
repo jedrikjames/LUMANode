@@ -872,6 +872,14 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid egress destination CIDR",
 		},
 		{
+			name: "non-canonical egress cidr",
+			edit: func(job *DeployJob) {
+				job.Egress.Mode = "restricted"
+				job.Egress.Rules = []EgressPolicyRule{{Protocol: "tcp", DestinationCIDR: "10.0.0.1/24", Port: 443}}
+			},
+			want: "non-canonical egress destination CIDR",
+		},
+		{
 			name: "invalid egress port",
 			edit: func(job *DeployJob) {
 				job.Egress.Mode = "restricted"

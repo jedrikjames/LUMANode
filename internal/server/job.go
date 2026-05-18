@@ -389,6 +389,9 @@ func validateEgressPolicy(job DeployJob) error {
 		if err != nil {
 			return fmt.Errorf("deployment job has invalid egress destination CIDR")
 		}
+		if rule.DestinationCIDR != cidr.String() {
+			return fmt.Errorf("deployment job has non-canonical egress destination CIDR")
+		}
 		key := fmt.Sprintf("%s/%s/%d", rule.Protocol, cidr.String(), rule.Port)
 		if _, exists := seenRules[key]; exists {
 			return fmt.Errorf("deployment job has duplicate egress rule")
