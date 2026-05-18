@@ -1673,6 +1673,33 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 			return fmt.Errorf("docker container %q did not keep expected tmpfs mount %q", plan.ContainerName, target)
 		}
 	}
+	if err := verifyStartedContainerTmpfsConfig(ctx, plan); err != nil {
+		return err
+	}
+	return nil
+}
+
+func verifyStartedContainerTmpfsConfig(ctx context.Context, plan DeploymentPlan) error {
+	output, err := exec.CommandContext(ctx, "docker", "inspect", "-f", "{{json .HostConfig.Tmpfs}}", plan.ContainerName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("docker container tmpfs config inspect failed: %w: %s", err, string(output))
+	}
+	var tmpfs map[string]string
+	if err := json.Unmarshal([]byte(strings.TrimSpace(string(output))), &tmpfs); err != nil {
+		return fmt.Errorf("docker container %q tmpfs config inspect returned invalid data", plan.ContainerName)
+	}
+	expected := map[string]string{
+		"/tmp": "rw,noexec,nosuid,nodev,size=" + defaultContainerTmpfsSize,
+		"/run": "rw,nosuid,nodev,size=16m",
+	}
+	if len(tmpfs) != len(expected) {
+		return fmt.Errorf("docker container %q did not keep expected tmpfs config", plan.ContainerName)
+	}
+	for target, options := range expected {
+		if tmpfs[target] != options {
+			return fmt.Errorf("docker container %q did not keep expected tmpfs config for %q", plan.ContainerName, target)
+		}
+	}
 	return nil
 }
 

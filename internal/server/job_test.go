@@ -2248,6 +2248,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -2344,6 +2348,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -2437,6 +2445,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -2531,6 +2543,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -2614,6 +2630,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -2765,6 +2785,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -3328,6 +3352,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -3410,6 +3438,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":false,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -3482,8 +3514,16 @@ func TestVerifyStartedContainerMountsRequiresTmpfsScratchPaths(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""}]'
-  exit 0
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""}]'
+      exit 0
+      ;;
+  esac
 fi
 exit 1
 `)
@@ -3495,6 +3535,34 @@ exit 1
 	err = verifyStartedContainerMounts(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), `tmpfs mount "/run"`) {
 		t.Fatalf("expected missing /run tmpfs drift failure, got %v", err)
+	}
+}
+
+func TestVerifyStartedContainerMountsRequiresTmpfsConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
+      exit 0
+      ;;
+  esac
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerMounts(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), `tmpfs config for "/tmp"`) {
+		t.Fatalf("expected tmpfs option drift failure, got %v", err)
 	}
 }
 
@@ -3512,6 +3580,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -3594,6 +3666,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
@@ -3682,6 +3758,10 @@ if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
 fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
     *json\ .Mounts*)
       echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
       exit 0
