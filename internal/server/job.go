@@ -234,17 +234,23 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 	if len(job.Mounts) > maxContainerMounts {
 		return fmt.Errorf("deployment job has too many mounts")
 	}
+	mountTargets := map[string]struct{}{}
 	for _, mount := range job.Mounts {
 		source := filepath.Clean(mount.Source)
 		if !filepath.IsAbs(source) || !strings.HasPrefix(source+string(filepath.Separator), tenantRoot) {
 			return fmt.Errorf("deployment job mount escapes tenant root")
 		}
-		if !filepath.IsAbs(mount.Target) {
+		target := filepath.Clean(mount.Target)
+		if !filepath.IsAbs(target) {
 			return fmt.Errorf("deployment job mount target must be absolute")
 		}
-		if unsafeMountTarget(mount.Target) {
+		if unsafeMountTarget(target) {
 			return fmt.Errorf("deployment job mount target is unsafe")
 		}
+		if _, exists := mountTargets[target]; exists {
+			return fmt.Errorf("deployment job has duplicate mount target")
+		}
+		mountTargets[target] = struct{}{}
 	}
 	if !job.Security.NoNewPrivileges {
 		return fmt.Errorf("deployment job must set no-new-privileges")

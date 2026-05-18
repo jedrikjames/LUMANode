@@ -644,6 +644,20 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "mount target is unsafe",
 		},
 		{
+			name: "duplicate mount target",
+			edit: func(job *DeployJob) {
+				job.Mounts = append(job.Mounts, struct {
+					Source   string `json:"source"`
+					Target   string `json:"target"`
+					ReadOnly bool   `json:"readOnly"`
+				}{
+					Source: "/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/other",
+					Target: "/data/../data",
+				})
+			},
+			want: "duplicate mount target",
+		},
+		{
 			name: "wrong tenant network",
 			edit: func(job *DeployJob) { job.Network.Name = "bridge" },
 			want: "invalid tenant network",
