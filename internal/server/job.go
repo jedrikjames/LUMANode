@@ -242,6 +242,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if !filepath.IsAbs(mount.Target) {
 			return fmt.Errorf("deployment job mount target must be absolute")
 		}
+		if unsafeMountTarget(mount.Target) {
+			return fmt.Errorf("deployment job mount target is unsafe")
+		}
 	}
 	if !job.Security.NoNewPrivileges {
 		return fmt.Errorf("deployment job must set no-new-privileges")
@@ -373,6 +376,20 @@ func validLumaIdentifier(value string) bool {
 func containsCapability(capabilities []string, target string) bool {
 	for _, capability := range capabilities {
 		if strings.EqualFold(strings.TrimSpace(capability), target) {
+			return true
+		}
+	}
+	return false
+}
+
+func unsafeMountTarget(target string) bool {
+	clean := filepath.Clean(target)
+	if clean == "/" {
+		return true
+	}
+	sensitiveTargets := []string{"/boot", "/dev", "/etc", "/proc", "/root", "/run", "/sys", "/tmp", "/var/run"}
+	for _, sensitive := range sensitiveTargets {
+		if clean == sensitive || strings.HasPrefix(clean, sensitive+"/") {
 			return true
 		}
 	}

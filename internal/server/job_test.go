@@ -634,6 +634,16 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "mount target must be absolute",
 		},
 		{
+			name: "root mount target",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/" },
+			want: "mount target is unsafe",
+		},
+		{
+			name: "sensitive mount target",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/proc/luma" },
+			want: "mount target is unsafe",
+		},
+		{
 			name: "wrong tenant network",
 			edit: func(job *DeployJob) { job.Network.Name = "bridge" },
 			want: "invalid tenant network",
