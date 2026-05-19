@@ -43,6 +43,7 @@ const maxContainerEnvVars = 128
 const maxContainerEffectiveEnvVars = 256
 const maxContainerEnvValueLength = 4096
 const maxContainerLabels = 128
+const maxContainerEffectiveLabels = 256
 const maxEgressPolicyRules = 256
 
 type DeployJob struct {

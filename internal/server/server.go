@@ -1564,7 +1564,13 @@ func verifyStartedContainerExposedPorts(plan DeploymentPlan, exposedPorts map[st
 }
 
 func verifyStartedContainerLumaLabels(plan DeploymentPlan, actualLabels map[string]string) error {
+	if len(actualLabels) > maxContainerEffectiveLabels {
+		return fmt.Errorf("docker container %q has too many effective Docker labels", plan.ContainerName)
+	}
 	for key, actual := range actualLabels {
+		if !validDockerLabel(key, actual) {
+			return fmt.Errorf("docker container %q has invalid effective Docker label %q", plan.ContainerName, key)
+		}
 		if !strings.HasPrefix(key, "luma.") {
 			continue
 		}

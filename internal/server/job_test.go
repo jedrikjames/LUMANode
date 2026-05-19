@@ -3381,6 +3381,11 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: `expected LUMA label "luma.template"`,
 		},
 		{
+			name:     "invalid-effective-label",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo","bad/label":"value"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `invalid effective Docker label "bad/label"`,
+		},
+		{
 			name:     "unexpected-exposed-port",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"ExposedPorts":{"80/tcp":{},"25565/tcp":{}},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: `unexpected exposed port "25565/tcp"`,
@@ -3511,6 +3516,55 @@ exit 1
 	err = verifyStartedContainerWorkload(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "too many effective environment variables") {
 		t.Fatalf("expected effective environment cap failure, got %v", err)
+	}
+}
+
+func TestVerifyStartedContainerWorkloadRejectsExcessiveEffectiveLabels(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_WORKLOAD_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	labels := map[string]string{
+		"luma.managed":    "true",
+		"luma.deployment": "dep_test",
+		"luma.tenant":     "tenant_demo",
+		"luma.node":       "node_local",
+		"luma.template":   "tmpl_demo",
+	}
+	for i := 0; len(labels) <= maxContainerEffectiveLabels; i++ {
+		labels[fmt.Sprintf("image.label.%03d", i)] = "value"
+	}
+	output, err := json.Marshal(map[string]any{
+		"Config": map[string]any{
+			"Entrypoint": []string{},
+			"Cmd":        []string{"sh", "-lc", "nginx -g 'daemon off;'"},
+			"WorkingDir": "/",
+			"Labels":     labels,
+			"Env": []string{
+				"LUMA_DEPLOYMENT_ID=dep_test",
+				"LUMA_NODE_ID=node_local",
+				"LUMA_TENANT_ID=tenant_demo",
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal workload output: %v", err)
+	}
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", string(output))
+
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerWorkload(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "too many effective Docker labels") {
+		t.Fatalf("expected effective label cap failure, got %v", err)
 	}
 }
 
