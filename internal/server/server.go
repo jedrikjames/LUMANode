@@ -1391,17 +1391,18 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 
 type dockerWorkloadInspect struct {
 	Config struct {
-		Entrypoint   []string          `json:"Entrypoint"`
-		Cmd          []string          `json:"Cmd"`
-		Env          []string          `json:"Env"`
-		WorkingDir   string            `json:"WorkingDir"`
-		OpenStdin    bool              `json:"OpenStdin"`
-		StdinOnce    bool              `json:"StdinOnce"`
-		Tty          bool              `json:"Tty"`
-		AttachStdin  bool              `json:"AttachStdin"`
-		AttachStdout bool              `json:"AttachStdout"`
-		AttachStderr bool              `json:"AttachStderr"`
-		Labels       map[string]string `json:"Labels"`
+		Entrypoint   []string            `json:"Entrypoint"`
+		Cmd          []string            `json:"Cmd"`
+		Env          []string            `json:"Env"`
+		WorkingDir   string              `json:"WorkingDir"`
+		OpenStdin    bool                `json:"OpenStdin"`
+		StdinOnce    bool                `json:"StdinOnce"`
+		Tty          bool                `json:"Tty"`
+		AttachStdin  bool                `json:"AttachStdin"`
+		AttachStdout bool                `json:"AttachStdout"`
+		AttachStderr bool                `json:"AttachStderr"`
+		Labels       map[string]string   `json:"Labels"`
+		ExposedPorts map[string]struct{} `json:"ExposedPorts"`
 	} `json:"Config"`
 }
 
@@ -1431,6 +1432,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 		return fmt.Errorf("docker container %q has unexpected attach stream settings", plan.ContainerName)
 	}
 	if err := verifyStartedContainerLumaLabels(plan, workload.Config.Labels); err != nil {
+		return err
+	}
+	if err := verifyStartedContainerExposedPorts(plan, workload.Config.ExposedPorts); err != nil {
 		return err
 	}
 	actualEnv := map[string]string{}
@@ -1464,6 +1468,26 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	for key, expected := range reserved {
 		if actual, ok := actualEnv[key]; ok && actual != expected {
 			return fmt.Errorf("docker container %q has drifted reserved environment variable %q", plan.ContainerName, key)
+		}
+	}
+	return nil
+}
+
+func verifyStartedContainerExposedPorts(plan DeploymentPlan, exposedPorts map[string]struct{}) error {
+	if len(exposedPorts) == 0 {
+		return nil
+	}
+	expected := map[string]struct{}{}
+	for _, port := range plan.Ports {
+		protocol := port.Protocol
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		expected[fmt.Sprintf("%d/%s", port.ContainerPort, protocol)] = struct{}{}
+	}
+	for port := range exposedPorts {
+		if _, ok := expected[port]; !ok {
+			return fmt.Errorf("docker container %q has unexpected exposed port %q", plan.ContainerName, port)
 		}
 	}
 	return nil

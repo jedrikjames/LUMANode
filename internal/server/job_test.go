@@ -3303,6 +3303,11 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: `expected LUMA label "luma.template"`,
 		},
 		{
+			name:     "unexpected-exposed-port",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"ExposedPorts":{"80/tcp":{},"25565/tcp":{}},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `unexpected exposed port "25565/tcp"`,
+		},
+		{
 			name:     "signed-env",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
 			contains: `environment variable "LUMA_TENANT_ID"`,
