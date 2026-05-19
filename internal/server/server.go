@@ -1983,14 +1983,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container resource inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 16 {
+	if len(fields) < 22 {
 		return fmt.Errorf("docker container %q resource inspect returned incomplete data", plan.ContainerName)
 	}
 	expectedNanoCpus := int64(math.Round(plan.Resources.CPUCores * 1_000_000_000))
@@ -2023,6 +2023,11 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	}
 	if fields[14] != "none" || fields[15] != "none" {
 		return fmt.Errorf("docker container %q has unexpected CPU set restrictions", plan.ContainerName)
+	}
+	for _, field := range fields[16:22] {
+		if field != "0" {
+			return fmt.Errorf("docker container %q has unexpected block I/O scheduler overrides", plan.ContainerName)
+		}
 	}
 	return nil
 }
