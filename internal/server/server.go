@@ -1289,8 +1289,8 @@ func mkdirAllNoSymlinks(directory string, restrictedRoot string) error {
 		if !info.IsDir() {
 			return fmt.Errorf("deployment directory %q uses non-directory path component %q", directory, current)
 		}
-		if pathWithinRoot(restrictedRoot, current) && info.Mode().Perm()&0o002 != 0 {
-			return fmt.Errorf("deployment directory %q uses world-writable tenant path component %q", directory, current)
+		if pathWithinRoot(restrictedRoot, current) && info.Mode().Perm()&0o022 != 0 {
+			return fmt.Errorf("deployment directory %q uses group- or world-writable tenant path component %q", directory, current)
 		}
 	}
 	return nil

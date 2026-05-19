@@ -523,23 +523,50 @@ func TestEnsureTenantDirectoryRejectsSymlinkedPathComponent(t *testing.T) {
 	}
 }
 
-func TestEnsureTenantDirectoryRejectsWorldWritableTenantPathComponent(t *testing.T) {
+func TestEnsureTenantDirectoryRejectsGroupOrWorldWritableTenantPathComponent(t *testing.T) {
+	cases := []struct {
+		name string
+		mode os.FileMode
+	}{
+		{name: "group-writable", mode: 0o770},
+		{name: "world-writable", mode: 0o777},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tenantRoot := filepath.Join(t.TempDir(), "tenant_demo")
+			deployments := filepath.Join(tenantRoot, "deployments")
+			if err := os.MkdirAll(deployments, 0o750); err != nil {
+				t.Fatalf("create deployment directory: %v", err)
+			}
+			if err := os.Chmod(deployments, tt.mode); err != nil {
+				t.Fatalf("make deployment directory writable by untrusted principals: %v", err)
+			}
+
+			target := filepath.Join(deployments, "dep_test")
+			err := ensureTenantDirectory(tenantRoot, target)
+			if err == nil || !strings.Contains(err.Error(), "group- or world-writable tenant path component") {
+				t.Fatalf("expected writable tenant directory refusal, got %v", err)
+			}
+			if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+				t.Fatalf("expected preflight not to create child inside writable directory, statErr=%v", statErr)
+			}
+		})
+	}
+}
+
+func TestEnsureTenantDirectoryAllowsOwnerWritableTenantPathComponent(t *testing.T) {
 	tenantRoot := filepath.Join(t.TempDir(), "tenant_demo")
 	deployments := filepath.Join(tenantRoot, "deployments")
 	if err := os.MkdirAll(deployments, 0o750); err != nil {
 		t.Fatalf("create deployment directory: %v", err)
 	}
-	if err := os.Chmod(deployments, 0o777); err != nil {
-		t.Fatalf("make deployment directory world-writable: %v", err)
-	}
 
 	target := filepath.Join(deployments, "dep_test")
-	err := ensureTenantDirectory(tenantRoot, target)
-	if err == nil || !strings.Contains(err.Error(), "world-writable tenant path component") {
-		t.Fatalf("expected world-writable tenant directory refusal, got %v", err)
+	if err := ensureTenantDirectory(tenantRoot, target); err != nil {
+		t.Fatalf("expected owner-writable tenant directory to pass, got %v", err)
 	}
-	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
-		t.Fatalf("expected preflight not to create child inside world-writable directory, statErr=%v", statErr)
+	if info, err := os.Stat(target); err != nil || !info.IsDir() {
+		t.Fatalf("expected preflight to create child inside owner-writable directory, info=%#v err=%v", info, err)
 	}
 }
 
