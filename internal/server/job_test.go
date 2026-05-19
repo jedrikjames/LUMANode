@@ -2542,6 +2542,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
+      exit 0
+      ;;
     *json\ .Config.Healthcheck*)
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
@@ -2645,6 +2649,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
+      exit 0
+      ;;
     *json\ .Config.Healthcheck*)
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
@@ -2743,6 +2751,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
       exit 0
       ;;
     *json\ .Config.Healthcheck*)
@@ -2853,6 +2865,10 @@ if [ "$1" = "inspect" ]; then
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
       exit 0
       ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
+      exit 0
+      ;;
     *json\ .Config.Healthcheck*)
       echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
       exit 0
@@ -2953,6 +2969,10 @@ if [ "$1" = "inspect" ]; then
       ;;
     *.HostConfig.Privileged*)
       echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM"
+      exit 0
+      ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
       exit 0
       ;;
     *json\ .Config.Healthcheck*)
@@ -3481,6 +3501,26 @@ exit 1
 	err = verifyStartedContainerIsolation(context.Background(), plan)
 	if err == nil || !strings.Contains(err.Error(), "exact security options") {
 		t.Fatalf("expected exact security option verification failure, got %v", err)
+	}
+}
+
+func TestVerifyStartedContainerImageRejectsTagDrift(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "nginx:latest"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerImage(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "expected image reference") {
+		t.Fatalf("expected image reference drift verification failure, got %v", err)
 	}
 }
 
@@ -4301,7 +4341,7 @@ exit 0
 	}
 	plan.Ports = nil
 	err = executeDeploymentPlan(context.Background(), plan)
-	if err == nil || !strings.Contains(err.Error(), "digest-pinned image") {
+	if err == nil || !strings.Contains(err.Error(), "expected image reference") {
 		t.Fatalf("expected image digest drift verification failure, got %v", err)
 	}
 	content, readErr := os.ReadFile(logFile)

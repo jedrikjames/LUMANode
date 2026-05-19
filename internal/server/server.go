@@ -1371,9 +1371,6 @@ func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) er
 }
 
 func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error {
-	if plan.ImageDigest == "" {
-		return nil
-	}
 	output, err := exec.CommandContext(
 		ctx,
 		"docker",
@@ -1387,7 +1384,7 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 	}
 	image := strings.TrimSpace(string(output))
 	if image != plan.ResolvedImage {
-		return fmt.Errorf("docker container %q did not keep expected digest-pinned image", plan.ContainerName)
+		return fmt.Errorf("docker container %q did not keep expected image reference", plan.ContainerName)
 	}
 	return nil
 }
