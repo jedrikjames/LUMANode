@@ -1679,6 +1679,10 @@ if [ "$1" = "info" ]; then
     echo runc
     exit 0
   fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
+    exit 0
+  fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
     echo "$DOCKER_ROOT_DIR"
     exit 0
@@ -1715,7 +1719,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -1769,6 +1773,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.DefaultRuntime}}" ]; then
     echo runc
+    exit 0
+  fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
     exit 0
   fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
@@ -1871,6 +1879,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.DefaultRuntime}}" ]; then
     echo runc
+    exit 0
+  fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
     exit 0
   fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
@@ -1995,6 +2007,10 @@ if [ "$1" = "info" ]; then
     echo runc
     exit 0
   fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
+    exit 0
+  fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
     echo "$DOCKER_ROOT_DIR"
     exit 0
@@ -2103,6 +2119,10 @@ if [ "$1" = "info" ]; then
     echo runc
     exit 0
   fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
+    exit 0
+  fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
     echo "$DOCKER_ROOT_DIR"
     exit 0
@@ -2195,6 +2215,10 @@ if [ "$1" = "info" ]; then
     echo kata
     exit 0
   fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[\"WARNING: No swap limit support\"]"
+    exit 0
+  fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then
     echo "$DOCKER_ROOT_DIR"
     exit 0
@@ -2230,11 +2254,23 @@ exit 0
 	if status.Ready {
 		t.Fatalf("expected runtime status to fail without Docker seccomp/AppArmor, got %#v", status)
 	}
-	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerOomKillEnabled || status.DockerIPv4Forwarding || status.DockerBridgeNfIptables || status.DockerBridgeNfIp6tables || status.DockerLiveRestore || status.DockerDefaultRuntimeRunc || !status.DockerRootDirProtected || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported || status.DockerOSTypeLinux {
+	if status.DockerSeccomp || status.DockerAppArmor || status.DockerUserNamespace || status.DockerCgroupDriverSystemd || status.DockerDebugDisabled || status.DockerExperimentalDisabled || status.DockerSwarmInactive || status.DockerOomKillEnabled || status.DockerIPv4Forwarding || status.DockerBridgeNfIptables || status.DockerBridgeNfIp6tables || status.DockerLiveRestore || status.DockerDefaultRuntimeRunc || status.DockerNoWarnings || !status.DockerRootDirProtected || status.DockerStorageOverlay2 || status.DockerStorageDType || status.DockerServerVersionSupported || status.DockerOSTypeLinux {
 		t.Fatalf("expected missing Docker seccomp/AppArmor/userns/live-restore/storage/version support, got %#v", status)
 	}
-	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerOomKill"] == "" || status.Errors["dockerIPv4Forwarding"] == "" || status.Errors["dockerBridgeNfIptables"] == "" || status.Errors["dockerBridgeNfIp6tables"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerDefaultRuntime"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" || status.Errors["dockerOSType"] == "" {
+	if status.Errors["dockerSeccomp"] == "" || status.Errors["dockerAppArmor"] == "" || status.Errors["dockerUserNamespace"] == "" || status.Errors["dockerCgroupDriver"] == "" || status.Errors["dockerDebug"] == "" || status.Errors["dockerExperimental"] == "" || status.Errors["dockerSwarm"] == "" || status.Errors["dockerOomKill"] == "" || status.Errors["dockerIPv4Forwarding"] == "" || status.Errors["dockerBridgeNfIptables"] == "" || status.Errors["dockerBridgeNfIp6tables"] == "" || status.Errors["dockerLiveRestore"] == "" || status.Errors["dockerDefaultRuntime"] == "" || status.Errors["dockerWarnings"] == "" || status.Errors["dockerStorageOverlay2"] == "" || status.Errors["dockerStorageDType"] == "" || status.Errors["dockerServerVersion"] == "" || status.Errors["dockerOSType"] == "" {
 		t.Fatalf("expected Docker security option errors, got %#v", status.Errors)
+	}
+}
+
+func TestDockerWarningsEmpty(t *testing.T) {
+	if !dockerWarningsEmpty("[]") || !dockerWarningsEmpty("null") || !dockerWarningsEmpty("") {
+		t.Fatal("expected empty, null, and blank Docker warnings to pass")
+	}
+	if dockerWarningsEmpty(`["WARNING: No swap limit support"]`) {
+		t.Fatal("expected Docker warnings to fail readiness")
+	}
+	if dockerWarningsEmpty("not-json") {
+		t.Fatal("expected malformed Docker warnings output to fail readiness")
 	}
 }
 
@@ -2284,6 +2320,10 @@ if [ "$1" = "info" ]; then
   fi
   if [ "$3" = "{{.DefaultRuntime}}" ]; then
     echo runc
+    exit 0
+  fi
+  if [ "$3" = "{{json .Warnings}}" ]; then
+    echo "[]"
     exit 0
   fi
   if [ "$3" = "{{.DockerRootDir}}" ]; then

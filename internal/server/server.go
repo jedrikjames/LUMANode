@@ -63,6 +63,7 @@ type RuntimeStatus struct {
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
 	DockerDefaultRuntimeRunc     bool              `json:"dockerDefaultRuntimeRunc"`
+	DockerNoWarnings             bool              `json:"dockerNoWarnings"`
 	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
@@ -781,6 +782,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDefaultRuntime"] = "docker default runtime must be runc"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .Warnings}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerWarnings"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerWarnings"] == "" {
+				status.Errors["dockerWarnings"] = err.Error()
+			}
+		} else if dockerWarningsEmpty(string(output)) {
+			status.DockerNoWarnings = true
+		} else {
+			status.Errors["dockerWarnings"] = "docker daemon reports warnings: " + strings.TrimSpace(string(output))
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DockerRootDir}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerRootDir"] = strings.TrimSpace(string(output))
@@ -883,11 +895,23 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
 	return status
+}
+
+func dockerWarningsEmpty(output string) bool {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" || trimmed == "null" {
+		return true
+	}
+	var warnings []string
+	if err := json.Unmarshal([]byte(trimmed), &warnings); err != nil {
+		return false
+	}
+	return len(warnings) == 0
 }
 
 func missingRequiredCgroupControllers(content string) []string {
