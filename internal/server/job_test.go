@@ -4934,6 +4934,11 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 			contains: `unexpected bind mount driver for "/data"`,
 		},
 		{
+			name:     "bind-name",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","Name":"tenant-data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected bind mount name for "/data"`,
+		},
+		{
 			name:     "duplicate tmpfs",
 			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
 			contains: `duplicate tmpfs mount target "/tmp"`,
@@ -4942,6 +4947,11 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 			name:     "tmpfs-driver",
 			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","Driver":"local","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
 			contains: `unexpected tmpfs mount driver for "/tmp"`,
+		},
+		{
+			name:     "tmpfs-name",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","Name":"scratch","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected tmpfs mount name for "/tmp"`,
 		},
 		{
 			name:     "tmpfs-source",

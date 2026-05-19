@@ -2042,6 +2042,7 @@ type dockerMountInspect struct {
 	Type        string `json:"Type"`
 	Source      string `json:"Source"`
 	Destination string `json:"Destination"`
+	Name        string `json:"Name"`
 	Driver      string `json:"Driver"`
 	Mode        string `json:"Mode"`
 	RW          bool   `json:"RW"`
@@ -2065,6 +2066,9 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 	expectedTmpfsTargets := map[string]bool{"/tmp": false, "/run": false}
 	for _, mount := range mounts {
 		if mount.Type == "tmpfs" {
+			if mount.Name != "" {
+				return fmt.Errorf("docker container %q has unexpected tmpfs mount name for %q", plan.ContainerName, mount.Destination)
+			}
 			if mount.Driver != "" {
 				return fmt.Errorf("docker container %q has unexpected tmpfs mount driver for %q", plan.ContainerName, mount.Destination)
 			}
@@ -2085,6 +2089,9 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 		}
 		if mount.Type != "bind" {
 			return fmt.Errorf("docker container %q has unexpected mount type %q at %q", plan.ContainerName, mount.Type, mount.Destination)
+		}
+		if mount.Name != "" {
+			return fmt.Errorf("docker container %q has unexpected bind mount name for %q", plan.ContainerName, mount.Destination)
 		}
 		if mount.Driver != "" {
 			return fmt.Errorf("docker container %q has unexpected bind mount driver for %q", plan.ContainerName, mount.Destination)
