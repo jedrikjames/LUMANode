@@ -1427,20 +1427,21 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 
 type dockerWorkloadInspect struct {
 	Config struct {
-		Entrypoint   []string            `json:"Entrypoint"`
-		Cmd          []string            `json:"Cmd"`
-		Shell        []string            `json:"Shell"`
-		Env          []string            `json:"Env"`
-		WorkingDir   string              `json:"WorkingDir"`
-		OpenStdin    bool                `json:"OpenStdin"`
-		StdinOnce    bool                `json:"StdinOnce"`
-		Tty          bool                `json:"Tty"`
-		AttachStdin  bool                `json:"AttachStdin"`
-		AttachStdout bool                `json:"AttachStdout"`
-		AttachStderr bool                `json:"AttachStderr"`
-		Labels       map[string]string   `json:"Labels"`
-		ExposedPorts map[string]struct{} `json:"ExposedPorts"`
-		Volumes      map[string]struct{} `json:"Volumes"`
+		Entrypoint      []string            `json:"Entrypoint"`
+		Cmd             []string            `json:"Cmd"`
+		Shell           []string            `json:"Shell"`
+		Env             []string            `json:"Env"`
+		WorkingDir      string              `json:"WorkingDir"`
+		OpenStdin       bool                `json:"OpenStdin"`
+		StdinOnce       bool                `json:"StdinOnce"`
+		Tty             bool                `json:"Tty"`
+		AttachStdin     bool                `json:"AttachStdin"`
+		AttachStdout    bool                `json:"AttachStdout"`
+		AttachStderr    bool                `json:"AttachStderr"`
+		NetworkDisabled bool                `json:"NetworkDisabled"`
+		Labels          map[string]string   `json:"Labels"`
+		ExposedPorts    map[string]struct{} `json:"ExposedPorts"`
+		Volumes         map[string]struct{} `json:"Volumes"`
 	} `json:"Config"`
 }
 
@@ -1471,6 +1472,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	}
 	if workload.Config.AttachStdin || workload.Config.AttachStdout || workload.Config.AttachStderr {
 		return fmt.Errorf("docker container %q has unexpected attach stream settings", plan.ContainerName)
+	}
+	if workload.Config.NetworkDisabled {
+		return fmt.Errorf("docker container %q has networking disabled outside the signed tenant network contract", plan.ContainerName)
 	}
 	if err := verifyStartedContainerLumaLabels(plan, workload.Config.Labels); err != nil {
 		return err
