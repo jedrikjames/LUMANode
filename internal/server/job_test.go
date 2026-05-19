@@ -3463,6 +3463,34 @@ exit 1
 	}
 }
 
+func TestStartedContainerStateRejectsMalformedBooleanFields(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+	}{
+		{name: "running", output: "yes false false false false healthy true dep_test tenant_demo node_local"},
+		{name: "paused", output: "true maybe false false false healthy true dep_test tenant_demo node_local"},
+		{name: "managed-label", output: "true false false false false healthy <no-value> dep_test tenant_demo node_local"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo %q
+  exit 0
+fi
+exit 1
+`, tt.output))
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			_, err := inspectStartedContainerState(context.Background(), "luma-dep_test")
+			if err == nil || !strings.Contains(err.Error(), "invalid") || !strings.Contains(err.Error(), "boolean") {
+				t.Fatalf("expected malformed boolean failure, got %v", err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 	cases := []struct {
 		name     string

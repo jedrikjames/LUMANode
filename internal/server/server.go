@@ -1387,18 +1387,53 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 	if len(fields) < 10 {
 		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned incomplete data", containerName)
 	}
+	running, err := dockerInspectBool(fields[0], "running", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
+	paused, err := dockerInspectBool(fields[1], "paused", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
+	restarting, err := dockerInspectBool(fields[2], "restarting", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
+	dead, err := dockerInspectBool(fields[3], "dead", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
+	oomKilled, err := dockerInspectBool(fields[4], "OOM-killed", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
+	managed, err := dockerInspectBool(fields[6], "managed label", containerName)
+	if err != nil {
+		return startedContainerState{}, err
+	}
 	return startedContainerState{
-		Running:      fields[0] == "true",
-		Paused:       fields[1] == "true",
-		Restarting:   fields[2] == "true",
-		Dead:         fields[3] == "true",
-		OOMKilled:    fields[4] == "true",
+		Running:      running,
+		Paused:       paused,
+		Restarting:   restarting,
+		Dead:         dead,
+		OOMKilled:    oomKilled,
 		Health:       fields[5],
-		Managed:      fields[6] == "true",
+		Managed:      managed,
 		DeploymentID: fields[7],
 		TenantID:     fields[8],
 		NodeID:       fields[9],
 	}, nil
+}
+
+func dockerInspectBool(value string, field string, containerName string) (bool, error) {
+	switch value {
+	case "true":
+		return true, nil
+	case "false":
+		return false, nil
+	default:
+		return false, fmt.Errorf("docker container %q state inspect returned invalid %s boolean %q", containerName, field, value)
+	}
 }
 
 func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) error {
