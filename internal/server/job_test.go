@@ -1018,6 +1018,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved LUMA environment variables",
 		},
 		{
+			name: "unsupported LUMA environment variable",
+			edit: func(job *DeployJob) { job.Env["LUMA_IMAGE_HINT"] = "spoofed" },
+			want: "unsupported LUMA environment variable",
+		},
+		{
 			name: "too many mounts",
 			edit: func(job *DeployJob) {
 				job.Mounts = nil

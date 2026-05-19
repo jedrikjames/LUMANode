@@ -253,6 +253,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if !validEnvironmentVariable(key, value) {
 			return fmt.Errorf("deployment job has invalid environment variable")
 		}
+		if strings.HasPrefix(key, "LUMA_") && !allowedLumaEnvironmentVariable(key) {
+			return fmt.Errorf("deployment job has unsupported LUMA environment variable")
+		}
 		if reservedEnvironmentOverride(job, key, value) {
 			return fmt.Errorf("deployment job cannot override reserved LUMA environment variables")
 		}
@@ -342,6 +345,15 @@ func reservedEnvironmentOverride(job DeployJob, key string, value string) bool {
 		return value != job.TenantID
 	case "LUMA_NODE_ID":
 		return value != job.NodeID
+	default:
+		return false
+	}
+}
+
+func allowedLumaEnvironmentVariable(key string) bool {
+	switch key {
+	case "LUMA_DEPLOYMENT_ID", "LUMA_TENANT_ID", "LUMA_NODE_ID", "LUMA_TEMPLATE_ID":
+		return true
 	default:
 		return false
 	}
