@@ -445,6 +445,16 @@ func TestHostPortPreflightRejectsBoundTCPPort(t *testing.T) {
 	}
 }
 
+func TestHostPortPreflightRejectsReservedPort(t *testing.T) {
+	plan := DeploymentPlan{
+		Ports: []PortPlan{{HostPort: 9443, ContainerPort: 9443, Protocol: "tcp"}},
+	}
+	err := validateHostPortsAvailable(plan)
+	if err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("expected reserved host port preflight failure, got %v", err)
+	}
+}
+
 func TestHostPortPreflightAcceptsAvailableUDPPort(t *testing.T) {
 	conn, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {

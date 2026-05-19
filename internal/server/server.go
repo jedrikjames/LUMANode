@@ -1141,6 +1141,9 @@ func validateHostPortsAvailable(plan DeploymentPlan) error {
 			continue
 		}
 		checked[key] = struct{}{}
+		if reservedHostPort(port.HostPort) {
+			return fmt.Errorf("host port preflight failed: %s/%d is reserved", protocol, port.HostPort)
+		}
 		switch protocol {
 		case "tcp":
 			listener, err := net.Listen("tcp", net.JoinHostPort("", strconv.Itoa(port.HostPort)))
