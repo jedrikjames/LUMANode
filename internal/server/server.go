@@ -2042,6 +2042,7 @@ type dockerMountInspect struct {
 	Type        string `json:"Type"`
 	Source      string `json:"Source"`
 	Destination string `json:"Destination"`
+	Mode        string `json:"Mode"`
 	RW          bool   `json:"RW"`
 	Propagation string `json:"Propagation"`
 }
@@ -2088,7 +2089,11 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 		if seenTargets[mount.Destination] {
 			return fmt.Errorf("docker container %q has duplicate mount target %q", plan.ContainerName, mount.Destination)
 		}
-		if filepath.Clean(mount.Source) != expected.Source || mount.RW == expected.ReadOnly || mount.Propagation != "rprivate" {
+		expectedMode := "rw"
+		if expected.ReadOnly {
+			expectedMode = "ro"
+		}
+		if filepath.Clean(mount.Source) != expected.Source || mount.RW == expected.ReadOnly || mount.Propagation != "rprivate" || (mount.Mode != "" && mount.Mode != expectedMode) {
 			return fmt.Errorf("docker container %q did not keep expected bind mount policy", plan.ContainerName)
 		}
 		seenTargets[mount.Destination] = true
