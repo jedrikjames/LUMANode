@@ -1670,10 +1670,12 @@ func verifyStartedContainerLumaLabels(plan DeploymentPlan, actualLabels map[stri
 }
 
 type dockerHealthcheckConfig struct {
-	Test     []string `json:"Test"`
-	Interval int64    `json:"Interval"`
-	Timeout  int64    `json:"Timeout"`
-	Retries  int      `json:"Retries"`
+	Test          []string `json:"Test"`
+	Interval      int64    `json:"Interval"`
+	Timeout       int64    `json:"Timeout"`
+	Retries       int      `json:"Retries"`
+	StartPeriod   int64    `json:"StartPeriod"`
+	StartInterval int64    `json:"StartInterval"`
 }
 
 func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan) error {
@@ -1708,7 +1710,11 @@ func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan)
 	if len(healthcheck.Test) != 2 || healthcheck.Test[0] != "CMD-SHELL" || healthcheck.Test[1] != plan.Healthcheck {
 		return fmt.Errorf("docker container %q did not keep expected healthcheck command", plan.ContainerName)
 	}
-	if healthcheck.Interval != int64(30*time.Second) || healthcheck.Timeout != int64(5*time.Second) || healthcheck.Retries != defaultContainerHealthRetries {
+	if healthcheck.Interval != int64(30*time.Second) ||
+		healthcheck.Timeout != int64(5*time.Second) ||
+		healthcheck.Retries != defaultContainerHealthRetries ||
+		healthcheck.StartPeriod != 0 ||
+		healthcheck.StartInterval != 0 {
 		return fmt.Errorf("docker container %q did not keep expected healthcheck timing", plan.ContainerName)
 	}
 	return nil
