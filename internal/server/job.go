@@ -238,6 +238,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if port.HostPort <= 0 || port.HostPort > 65535 || port.ContainerPort <= 0 || port.ContainerPort > 65535 {
 			return fmt.Errorf("deployment job has invalid port mapping")
 		}
+		if reservedHostPort(port.HostPort) {
+			return fmt.Errorf("deployment job uses reserved host port")
+		}
 		if port.Protocol != "" && port.Protocol != "tcp" && port.Protocol != "udp" {
 			return fmt.Errorf("deployment job has invalid port protocol")
 		}
@@ -501,6 +504,15 @@ func validLumaIdentifier(value string) bool {
 		return false
 	}
 	return !previousSeparator && value[0] != '_' && value[0] != '-'
+}
+
+func reservedHostPort(port int) bool {
+	switch port {
+	case 22, 80, 443, 9443:
+		return true
+	default:
+		return false
+	}
 }
 
 func containsCapability(capabilities []string, target string) bool {

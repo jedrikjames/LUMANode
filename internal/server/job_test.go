@@ -1047,6 +1047,21 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid port mapping",
 		},
 		{
+			name: "reserved ssh host port",
+			edit: func(job *DeployJob) { job.Ports[0].HostPort = 22 },
+			want: "reserved host port",
+		},
+		{
+			name: "reserved lumanode host port",
+			edit: func(job *DeployJob) { job.Ports[0].HostPort = 9443 },
+			want: "reserved host port",
+		},
+		{
+			name: "reserved web host port",
+			edit: func(job *DeployJob) { job.Ports[0].HostPort = 443 },
+			want: "reserved host port",
+		},
+		{
 			name: "invalid protocol",
 			edit: func(job *DeployJob) { job.Ports[0].Protocol = "sctp" },
 			want: "invalid port protocol",
