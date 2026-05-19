@@ -2619,6 +2619,12 @@ exit 0
 	if err == nil || !strings.Contains(err.Error(), "inter-container communication enabled") {
 		t.Fatalf("expected tenant network ICC refusal, got %v", err)
 	}
+
+	t.Setenv("DOCKER_NETWORK_LABEL_OUTPUT", "true tenant_demo false overlay")
+	err = ensureTenantNetwork(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "unexpected driver") {
+		t.Fatalf("expected tenant network driver refusal, got %v", err)
+	}
 }
 
 func TestEnsureTenantNetworkVerifiesLabelsAfterCreate(t *testing.T) {

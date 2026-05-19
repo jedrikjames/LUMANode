@@ -2222,7 +2222,7 @@ func verifyTenantNetworkOwnership(ctx context.Context, plan DeploymentPlan) erro
 		"network",
 		"inspect",
 		"-f",
-		`{{ index .Labels "luma.managed" }} {{ index .Labels "luma.tenant" }} {{ index .Options "com.docker.network.bridge.enable_icc" }}`,
+		`{{ index .Labels "luma.managed" }} {{ index .Labels "luma.tenant" }} {{ index .Options "com.docker.network.bridge.enable_icc" }} {{ .Driver }}`,
 		networkName,
 	)
 	output, err := labelInspect.CombinedOutput()
@@ -2235,6 +2235,9 @@ func verifyTenantNetworkOwnership(ctx context.Context, plan DeploymentPlan) erro
 	}
 	if len(ownership) < 3 || ownership[2] != "false" {
 		return fmt.Errorf("docker network use refused for tenant network %q with inter-container communication enabled", networkName)
+	}
+	if len(ownership) > 3 && ownership[3] != "bridge" {
+		return fmt.Errorf("docker network use refused for tenant network %q with unexpected driver", networkName)
 	}
 	return nil
 }
