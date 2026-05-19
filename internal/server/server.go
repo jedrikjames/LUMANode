@@ -2066,6 +2066,9 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 			if _, ok := expectedTmpfsTargets[mount.Destination]; !ok {
 				return fmt.Errorf("docker container %q has unexpected tmpfs mount target %q", plan.ContainerName, mount.Destination)
 			}
+			if expectedTmpfsTargets[mount.Destination] {
+				return fmt.Errorf("docker container %q has duplicate tmpfs mount target %q", plan.ContainerName, mount.Destination)
+			}
 			if !mount.RW {
 				return fmt.Errorf("docker container %q did not keep expected tmpfs mount %q writable", plan.ContainerName, mount.Destination)
 			}

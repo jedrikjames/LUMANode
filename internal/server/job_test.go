@@ -4923,6 +4923,11 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test/other","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
 			contains: `duplicate mount target "/data"`,
 		},
+		{
+			name:     "duplicate tmpfs",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `duplicate tmpfs mount target "/tmp"`,
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
