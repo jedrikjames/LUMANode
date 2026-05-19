@@ -1403,6 +1403,7 @@ type dockerWorkloadInspect struct {
 		AttachStderr bool                `json:"AttachStderr"`
 		Labels       map[string]string   `json:"Labels"`
 		ExposedPorts map[string]struct{} `json:"ExposedPorts"`
+		Volumes      map[string]struct{} `json:"Volumes"`
 	} `json:"Config"`
 }
 
@@ -1437,6 +1438,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	if err := verifyStartedContainerExposedPorts(plan, workload.Config.ExposedPorts); err != nil {
 		return err
 	}
+	if err := verifyStartedContainerImageVolumes(plan, workload.Config.Volumes); err != nil {
+		return err
+	}
 	actualEnv := map[string]string{}
 	for _, item := range workload.Config.Env {
 		key, value, ok := strings.Cut(item, "=")
@@ -1468,6 +1472,22 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	for key, expected := range reserved {
 		if actual, ok := actualEnv[key]; ok && actual != expected {
 			return fmt.Errorf("docker container %q has drifted reserved environment variable %q", plan.ContainerName, key)
+		}
+	}
+	return nil
+}
+
+func verifyStartedContainerImageVolumes(plan DeploymentPlan, volumes map[string]struct{}) error {
+	if len(volumes) == 0 {
+		return nil
+	}
+	expected := map[string]struct{}{}
+	for _, mount := range plan.Mounts {
+		expected[mount.Target] = struct{}{}
+	}
+	for target := range volumes {
+		if _, ok := expected[target]; !ok {
+			return fmt.Errorf("docker container %q has unexpected image volume %q", plan.ContainerName, target)
 		}
 	}
 	return nil

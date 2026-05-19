@@ -3308,6 +3308,11 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: `unexpected exposed port "25565/tcp"`,
 		},
 		{
+			name:     "unexpected-image-volume",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Volumes":{"/cache":{}},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `unexpected image volume "/cache"`,
+		},
+		{
 			name:     "signed-env",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
 			contains: `environment variable "LUMA_TENANT_ID"`,
@@ -3367,7 +3372,7 @@ fi
 exit 1
 `)
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Volumes":{"/data":{}},"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
 	plan, err := deploymentPlan(sampleJob())
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
