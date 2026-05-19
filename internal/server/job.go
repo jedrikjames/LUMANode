@@ -507,8 +507,11 @@ func validLumaIdentifier(value string) bool {
 }
 
 func reservedHostPort(port int) bool {
+	if port < 1024 {
+		return true
+	}
 	switch port {
-	case 22, 80, 443, 9443:
+	case 9443:
 		return true
 	default:
 		return false

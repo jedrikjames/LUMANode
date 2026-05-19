@@ -1062,6 +1062,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved host port",
 		},
 		{
+			name: "privileged mail host port",
+			edit: func(job *DeployJob) { job.Ports[0].HostPort = 25 },
+			want: "reserved host port",
+		},
+		{
 			name: "invalid protocol",
 			edit: func(job *DeployJob) { job.Ports[0].Protocol = "sctp" },
 			want: "invalid port protocol",
