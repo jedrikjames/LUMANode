@@ -5218,6 +5218,26 @@ func TestVerifyStartedContainerResourcesRequiresLogBackpressurePolicy(t *testing
 	}
 }
 
+func TestVerifyStartedContainerResourcesRejectsExtraLogOptions(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0 0 0 5"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerResources(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "log driver options") {
+		t.Fatalf("expected extra log option verification failure, got %v", err)
+	}
+}
+
 func TestVerifyStartedContainerResourcesRejectsSchedulerOverrides(t *testing.T) {
 	cases := []struct {
 		name     string

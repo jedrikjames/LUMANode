@@ -2117,7 +2117,7 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ if .HostConfig.MemorySwappiness }}{{ .HostConfig.MemorySwappiness }}{{ else }}0{{ end }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }} {{ .HostConfig.CpuRealtimeRuntime }} {{ .HostConfig.CpuRealtimePeriod }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ if .HostConfig.MemorySwappiness }}{{ .HostConfig.MemorySwappiness }}{{ else }}0{{ end }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }} {{ .HostConfig.CpuRealtimeRuntime }} {{ .HostConfig.CpuRealtimePeriod }} {{ len .HostConfig.LogConfig.Config }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
@@ -2151,6 +2151,9 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	}
 	if fields[6] != "json-file" || fields[7] != defaultContainerLogMaxSize || fields[8] != defaultContainerLogMaxFile || fields[9] != defaultContainerLogMode || fields[10] != defaultContainerLogMaxBufferSize {
 		return fmt.Errorf("docker container %q did not keep expected log rotation settings", plan.ContainerName)
+	}
+	if len(fields) == 26 && fields[25] != "4" {
+		return fmt.Errorf("docker container %q has unexpected log driver options", plan.ContainerName)
 	}
 	if fields[11] != "0" {
 		return fmt.Errorf("docker container %q has unexpected memory reservation", plan.ContainerName)
