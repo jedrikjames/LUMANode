@@ -4929,9 +4929,19 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 			contains: `expected bind mount policy`,
 		},
 		{
+			name:     "bind-driver",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","Driver":"local","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected bind mount driver for "/data"`,
+		},
+		{
 			name:     "duplicate tmpfs",
 			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
 			contains: `duplicate tmpfs mount target "/tmp"`,
+		},
+		{
+			name:     "tmpfs-driver",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","Driver":"local","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `unexpected tmpfs mount driver for "/tmp"`,
 		},
 		{
 			name:     "tmpfs-source",
