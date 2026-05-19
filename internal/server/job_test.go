@@ -1095,6 +1095,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved LUMA labels",
 		},
 		{
+			name: "unsupported luma label",
+			edit: func(job *DeployJob) { job.Labels["luma.image_hint"] = "spoofed" },
+			want: "unsupported LUMA Docker label",
+		},
+		{
 			name: "invalid docker label",
 			edit: func(job *DeployJob) { job.Labels["bad\nkey"] = "value" },
 			want: "invalid Docker label",
