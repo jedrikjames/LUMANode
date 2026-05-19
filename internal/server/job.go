@@ -517,7 +517,7 @@ func unsafeMountTarget(target string) bool {
 	if clean == "/" {
 		return true
 	}
-	sensitiveTargets := []string{"/boot", "/dev", "/etc", "/proc", "/root", "/run", "/sys", "/tmp", "/var/run"}
+	sensitiveTargets := []string{"/bin", "/boot", "/dev", "/etc", "/lib", "/lib64", "/opt", "/proc", "/root", "/run", "/sbin", "/sys", "/tmp", "/usr", "/var/run"}
 	for _, sensitive := range sensitiveTargets {
 		if clean == sensitive || strings.HasPrefix(clean, sensitive+"/") {
 			return true

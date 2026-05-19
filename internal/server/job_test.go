@@ -951,6 +951,16 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "mount target is unsafe",
 		},
 		{
+			name: "core binary mount target",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/usr/local/bin" },
+			want: "mount target is unsafe",
+		},
+		{
+			name: "library mount target",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/lib/x86_64-linux-gnu" },
+			want: "mount target is unsafe",
+		},
+		{
 			name: "duplicate mount target",
 			edit: func(job *DeployJob) {
 				job.Mounts = append(job.Mounts, struct {
