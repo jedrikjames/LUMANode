@@ -713,6 +713,43 @@ func TestEgressFirewallCommandsRejectInvalidContainerIP(t *testing.T) {
 	}
 }
 
+func TestRunIdempotentCommandChecksForwardChainComments(t *testing.T) {
+	tempDir := t.TempDir()
+	logFile := filepath.Join(tempDir, "nft.log")
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+printf '%s\n' "$*" >> "$NFT_LOG"
+if [ "$1" = "list" ] && [ "$5" = "forward" ]; then
+  echo 'ct state established,related counter accept comment "luma:base:forward-established"'
+  exit 0
+fi
+if [ "$1" = "list" ] && [ "$5" = "input" ]; then
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("NFT_LOG", logFile)
+	command := CommandPlan{
+		Name:              "nft",
+		SkipIfRuleComment: "luma:base:forward-established",
+		Args:              []string{"add", "rule", "inet", "lumapanel", "forward", "ct", "state", "established,related", "counter", "accept", "comment", "luma:base:forward-established"},
+	}
+	if err := runIdempotentCommand(context.Background(), command); err != nil {
+		t.Fatalf("expected existing forward-chain comment to skip command, got %v", err)
+	}
+	content, err := os.ReadFile(logFile)
+	if err != nil {
+		t.Fatalf("read nft log: %v", err)
+	}
+	log := string(content)
+	if !strings.Contains(log, "list chain inet lumapanel forward") {
+		t.Fatalf("expected forward chain lookup, got %q", log)
+	}
+	if strings.Contains(log, "add rule") {
+		t.Fatalf("expected add rule to be skipped for existing forward comment, got %q", log)
+	}
+}
+
 func TestVerifyDeploymentEgressFirewallRequiresExpectedRules(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh

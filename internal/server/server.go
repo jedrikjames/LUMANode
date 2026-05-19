@@ -2280,7 +2280,7 @@ func verifyTenantNetworkOwnership(ctx context.Context, plan DeploymentPlan) erro
 }
 
 func runIdempotentCommand(ctx context.Context, command CommandPlan) error {
-	if command.SkipIfRuleComment != "" && nftRuleCommentExists(ctx, command.SkipIfRuleComment) {
+	if command.SkipIfRuleComment != "" && nftRuleCommentExists(ctx, command, command.SkipIfRuleComment) {
 		return nil
 	}
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
@@ -2566,13 +2566,32 @@ func removeExistingContainer(ctx context.Context, plan DeploymentPlan) error {
 	return fmt.Errorf("docker container replace failed: %w: %s", err, outputText)
 }
 
-func nftRuleCommentExists(ctx context.Context, comment string) bool {
-	cmd := exec.CommandContext(ctx, "nft", "list", "chain", "inet", "lumapanel", "input")
+func nftRuleCommentExists(ctx context.Context, command CommandPlan, comment string) bool {
+	chain := nftRuleCommandChain(command)
+	if chain == "" {
+		return false
+	}
+	cmd := exec.CommandContext(ctx, "nft", "list", "chain", "inet", "lumapanel", chain)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return false
 	}
 	return strings.Contains(string(output), strconv.Quote(comment))
+}
+
+func nftRuleCommandChain(command CommandPlan) string {
+	if command.Name != "nft" || len(command.Args) < 5 {
+		return ""
+	}
+	if command.Args[0] != "add" || command.Args[1] != "rule" || command.Args[2] != "inet" || command.Args[3] != "lumapanel" {
+		return ""
+	}
+	switch command.Args[4] {
+	case "input", "forward":
+		return command.Args[4]
+	default:
+		return ""
+	}
 }
 
 func writeJSON(w http.ResponseWriter, value any) {
