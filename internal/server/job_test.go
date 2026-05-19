@@ -3460,6 +3460,55 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerWorkloadRejectsExcessiveEffectiveEnvironment(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_WORKLOAD_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	env := []string{
+		"LUMA_DEPLOYMENT_ID=dep_test",
+		"LUMA_NODE_ID=node_local",
+		"LUMA_TENANT_ID=tenant_demo",
+	}
+	for i := 0; len(env) <= maxContainerEffectiveEnvVars; i++ {
+		env = append(env, fmt.Sprintf("IMAGE_ENV_%03d=value", i))
+	}
+	output, err := json.Marshal(map[string]any{
+		"Config": map[string]any{
+			"Entrypoint": []string{},
+			"Cmd":        []string{"sh", "-lc", "nginx -g 'daemon off;'"},
+			"WorkingDir": "/",
+			"Labels": map[string]string{
+				"luma.managed":    "true",
+				"luma.deployment": "dep_test",
+				"luma.tenant":     "tenant_demo",
+				"luma.node":       "node_local",
+				"luma.template":   "tmpl_demo",
+			},
+			"Env": env,
+		},
+	})
+	if err != nil {
+		t.Fatalf("marshal workload output: %v", err)
+	}
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", string(output))
+
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerWorkload(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "too many effective environment variables") {
+		t.Fatalf("expected effective environment cap failure, got %v", err)
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithIsolationDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")

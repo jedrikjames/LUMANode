@@ -1485,6 +1485,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	if err := verifyStartedContainerImageVolumes(plan, workload.Config.Volumes); err != nil {
 		return err
 	}
+	if len(workload.Config.Env) > maxContainerEffectiveEnvVars {
+		return fmt.Errorf("docker container %q has too many effective environment variables", plan.ContainerName)
+	}
 	actualEnv := map[string]string{}
 	for _, item := range workload.Config.Env {
 		key, value, ok := strings.Cut(item, "=")

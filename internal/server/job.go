@@ -40,6 +40,7 @@ const maxContainerDiskGB = 10240
 const maxContainerPortMappings = 256
 const maxContainerMounts = 64
 const maxContainerEnvVars = 128
+const maxContainerEffectiveEnvVars = 256
 const maxContainerEnvValueLength = 4096
 const maxContainerLabels = 128
 const maxEgressPolicyRules = 256
