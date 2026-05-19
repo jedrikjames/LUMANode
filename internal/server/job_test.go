@@ -2808,6 +2808,147 @@ exit 0
 	}
 }
 
+func TestExecuteDeploymentPlanCleansPartialEgressRulesAfterVerificationFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	dockerLog := filepath.Join(tempDir, "docker.log")
+	nftLog := filepath.Join(tempDir, "nft.log")
+	stateFile := filepath.Join(tempDir, "container-state")
+	egressApplied := filepath.Join(tempDir, "egress-applied")
+	egressCleaned := filepath.Join(tempDir, "egress-cleaned")
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "network" ] && [ "$2" = "inspect" ] && [ "$3" = "-f" ]; then
+  echo "true tenant_demo false"
+  exit 0
+fi
+if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
+      exit 0
+      ;;
+    *.HostConfig.NanoCpus*)
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      exit 0
+      ;;
+    *.HostConfig.Privileged*)
+      echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, none none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger,"
+      exit 0
+      ;;
+    *.Config.Image*)
+      echo "nginx:1.27-alpine"
+      exit 0
+      ;;
+    *json\ .Config.Healthcheck*)
+      echo '{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3}'
+      exit 0
+      ;;
+    *json\ .*)
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      exit 0
+      ;;
+    *.State.Running*)
+      echo "true healthy true dep_test tenant_demo node_local"
+      exit 0
+      ;;
+    *luma.managed*)
+      if [ -f "$CONTAINER_STATE" ]; then
+        echo "true dep_test tenant_demo node_local"
+        exit 0
+      fi
+      echo "No such container" >&2
+      exit 1
+      ;;
+    *NetworkSettings.Networks*)
+      echo "172.18.0.4"
+      exit 0
+      ;;
+  esac
+fi
+if [ "$1" = "run" ]; then
+  touch "$CONTAINER_STATE"
+fi
+if [ "$1" = "rm" ]; then
+  rm -f "$CONTAINER_STATE"
+fi
+printf '%s\n' "$*" >> "$DOCKER_LOG"
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+printf '%s\n' "$*" >> "$NFT_LOG"
+if [ "$1" = "-a" ] && [ "$6" = "input" ]; then
+  exit 0
+fi
+if [ "$1" = "-a" ] && [ "$6" = "forward" ]; then
+  if [ -f "$EGRESS_CLEANED" ]; then
+    exit 0
+  fi
+  if [ -f "$EGRESS_APPLIED" ]; then
+    echo 'ip saddr 172.18.0.4 drop comment "luma:dep_test:egress:drop" # handle 55'
+    echo 'ip saddr 172.18.0.4 ip daddr 203.0.113.10 tcp dport 443 counter accept comment "luma:dep_test:egress:stale" # handle 56'
+  fi
+  exit 0
+fi
+if [ "$1" = "add" ] && [ "$5" = "forward" ]; then
+  touch "$EGRESS_APPLIED"
+  exit 0
+fi
+if [ "$1" = "delete" ] && [ "$5" = "forward" ]; then
+  if [ "$7" = "55" ] || [ "$7" = "56" ]; then
+    touch "$EGRESS_CLEANED"
+  fi
+  exit 0
+fi
+exit 0
+`)
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("DOCKER_LOG", dockerLog)
+	t.Setenv("NFT_LOG", nftLog)
+	t.Setenv("CONTAINER_STATE", stateFile)
+	t.Setenv("EGRESS_APPLIED", egressApplied)
+	t.Setenv("EGRESS_CLEANED", egressCleaned)
+
+	job := sampleJob()
+	job.Egress.Mode = "deny-all"
+	plan, err := deploymentPlan(job)
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	err = executeDeploymentPlan(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "unexpected deployment rule") {
+		t.Fatalf("expected egress verification failure, got %v", err)
+	}
+	dockerContent, readErr := os.ReadFile(dockerLog)
+	if readErr != nil {
+		t.Fatalf("read docker log: %v", readErr)
+	}
+	if !strings.Contains(string(dockerContent), "rm --force --volumes luma-dep_test") {
+		t.Fatalf("expected failed egress verification to remove started container, got %q", string(dockerContent))
+	}
+	nftContent, readErr := os.ReadFile(nftLog)
+	if readErr != nil {
+		t.Fatalf("read nft log: %v", readErr)
+	}
+	nftText := string(nftContent)
+	if !strings.Contains(nftText, "delete rule inet lumapanel forward handle 55") {
+		t.Fatalf("expected cleanup to delete applied egress drop rule, got %q", nftText)
+	}
+	if !strings.Contains(nftText, "delete rule inet lumapanel forward handle 56") {
+		t.Fatalf("expected cleanup to delete unexpected egress rule, got %q", nftText)
+	}
+	if _, statErr := os.Stat(stateFile); !os.IsNotExist(statErr) {
+		t.Fatalf("expected cleanup to remove container state, statErr=%v", statErr)
+	}
+}
+
 func TestExecuteDeploymentPlanPrunesStaleEgressRulesForAllowAllRedeploy(t *testing.T) {
 	tempDir := t.TempDir()
 	dockerLog := filepath.Join(tempDir, "docker.log")
