@@ -498,6 +498,15 @@ func TestEnsureTenantDirectoryCreatesNestedTenantPath(t *testing.T) {
 	if info, err := os.Stat(target); err != nil || !info.IsDir() {
 		t.Fatalf("expected nested tenant directory to exist, info=%#v err=%v", info, err)
 	}
+	for _, path := range []string{tenantRoot, filepath.Join(tenantRoot, "deployments"), filepath.Join(tenantRoot, "deployments", "dep_test"), target} {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("stat created tenant directory %q: %v", path, err)
+		}
+		if info.Mode().Perm()&0o022 != 0 {
+			t.Fatalf("expected created tenant directory %q not to be group- or world-writable, mode=%#o", path, info.Mode().Perm())
+		}
+	}
 }
 
 func TestEnsureTenantDirectoryRejectsSymlinkedPathComponent(t *testing.T) {

@@ -1278,7 +1278,7 @@ func mkdirAllNoSymlinks(directory string, restrictedRoot string) error {
 			if err := os.Mkdir(current, 0o750); err != nil {
 				return err
 			}
-			continue
+			info, err = os.Lstat(current)
 		}
 		if err != nil {
 			return err
