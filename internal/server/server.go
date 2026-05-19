@@ -2072,6 +2072,9 @@ func verifyStartedContainerMounts(ctx context.Context, plan DeploymentPlan) erro
 			if !mount.RW {
 				return fmt.Errorf("docker container %q did not keep expected tmpfs mount %q writable", plan.ContainerName, mount.Destination)
 			}
+			if mount.Source != "" || mount.Propagation != "" {
+				return fmt.Errorf("docker container %q did not keep expected tmpfs mount policy for %q", plan.ContainerName, mount.Destination)
+			}
 			expectedTmpfsTargets[mount.Destination] = true
 			continue
 		}

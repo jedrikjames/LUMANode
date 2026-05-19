@@ -4928,6 +4928,16 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
 			contains: `duplicate tmpfs mount target "/tmp"`,
 		},
+		{
+			name:     "tmpfs-source",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"tmpfs","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `tmpfs mount policy for "/tmp"`,
+		},
+		{
+			name:     "tmpfs-propagation",
+			mounts:   `[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":"rshared"},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]`,
+			contains: `tmpfs mount policy for "/tmp"`,
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
