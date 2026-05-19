@@ -3556,6 +3556,11 @@ func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3,"StartInterval":1000000000}`,
 			contains: "healthcheck timing",
 		},
+		{
+			name:     "disabled",
+			output:   `{"Test":["CMD-SHELL","curl -fsS http://127.0.0.1"],"Interval":30000000000,"Timeout":5000000000,"Retries":3,"Disable":true}`,
+			contains: "disabled signed healthcheck",
+		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

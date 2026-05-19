@@ -1695,6 +1695,7 @@ type dockerHealthcheckConfig struct {
 	Retries       int      `json:"Retries"`
 	StartPeriod   int64    `json:"StartPeriod"`
 	StartInterval int64    `json:"StartInterval"`
+	Disable       bool     `json:"Disable"`
 }
 
 func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan) error {
@@ -1728,6 +1729,9 @@ func verifyStartedContainerHealthcheck(ctx context.Context, plan DeploymentPlan)
 	}
 	if len(healthcheck.Test) != 2 || healthcheck.Test[0] != "CMD-SHELL" || healthcheck.Test[1] != plan.Healthcheck {
 		return fmt.Errorf("docker container %q did not keep expected healthcheck command", plan.ContainerName)
+	}
+	if healthcheck.Disable {
+		return fmt.Errorf("docker container %q has disabled signed healthcheck", plan.ContainerName)
 	}
 	if healthcheck.Interval != int64(30*time.Second) ||
 		healthcheck.Timeout != int64(5*time.Second) ||
