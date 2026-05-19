@@ -4377,6 +4377,26 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerIsolationRejectsVolumeDriver(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, 80/tcp=8080;, none none none none none none none none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger, 0 false nfs"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerIsolation(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "volume driver") {
+		t.Fatalf("expected volume-driver verification failure, got %v", err)
+	}
+}
+
 func TestContainerPortBindingsMatchSignedPlan(t *testing.T) {
 	plan, err := deploymentPlan(sampleJob())
 	if err != nil {
