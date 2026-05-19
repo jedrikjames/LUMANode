@@ -2700,7 +2700,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -2807,7 +2807,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -2912,7 +2912,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -3052,7 +3052,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -3164,7 +3164,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false unhealthy true dep_test tenant_demo node_local"
+      echo "true false false false false unhealthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -3270,7 +3270,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false starting true dep_test tenant_demo node_local"
+      echo "true false false false false starting true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -3357,7 +3357,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_other tenant_demo node_local"
+      echo "true false false false false healthy true dep_other tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -3412,7 +3412,7 @@ func TestWaitForStartedContainerHealthyRejectsNodeLabelDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo "true false false false false healthy true dep_test tenant_demo node_other"
+  echo "true false false false false healthy true dep_test tenant_demo node_other 0"
   exit 0
 fi
 exit 1
@@ -3433,10 +3433,10 @@ func TestStartedContainerStateRejectsUnsafeRuntimeStates(t *testing.T) {
 		name   string
 		output string
 	}{
-		{name: "paused", output: "true true false false false healthy true dep_test tenant_demo node_local"},
-		{name: "restarting", output: "true false true false false healthy true dep_test tenant_demo node_local"},
-		{name: "dead", output: "true false false true false healthy true dep_test tenant_demo node_local"},
-		{name: "oom-killed", output: "true false false false true healthy true dep_test tenant_demo node_local"},
+		{name: "paused", output: "true true false false false healthy true dep_test tenant_demo node_local 0"},
+		{name: "restarting", output: "true false true false false healthy true dep_test tenant_demo node_local 0"},
+		{name: "dead", output: "true false false true false healthy true dep_test tenant_demo node_local 0"},
+		{name: "oom-killed", output: "true false false false true healthy true dep_test tenant_demo node_local 0"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3465,12 +3465,14 @@ exit 1
 
 func TestStartedContainerStateRejectsMalformedBooleanFields(t *testing.T) {
 	cases := []struct {
-		name   string
-		output string
+		name     string
+		output   string
+		contains string
 	}{
-		{name: "running", output: "yes false false false false healthy true dep_test tenant_demo node_local"},
-		{name: "paused", output: "true maybe false false false healthy true dep_test tenant_demo node_local"},
-		{name: "managed-label", output: "true false false false false healthy <no-value> dep_test tenant_demo node_local"},
+		{name: "running", output: "yes false false false false healthy true dep_test tenant_demo node_local 0", contains: "boolean"},
+		{name: "paused", output: "true maybe false false false healthy true dep_test tenant_demo node_local 0", contains: "boolean"},
+		{name: "managed-label", output: "true false false false false healthy <no-value> dep_test tenant_demo node_local 0", contains: "boolean"},
+		{name: "restart-count", output: "true false false false false healthy true dep_test tenant_demo node_local invalid", contains: "restart count"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
@@ -3484,10 +3486,32 @@ exit 1
 `, tt.output))
 			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 			_, err := inspectStartedContainerState(context.Background(), "luma-dep_test")
-			if err == nil || !strings.Contains(err.Error(), "invalid") || !strings.Contains(err.Error(), "boolean") {
-				t.Fatalf("expected malformed boolean failure, got %v", err)
+			if err == nil || !strings.Contains(err.Error(), "invalid") || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected malformed %s failure, got %v", tt.contains, err)
 			}
 		})
+	}
+}
+
+func TestStartedContainerStateRejectsRestartCountDrift(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "true false false false false healthy true dep_test tenant_demo node_local 1"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	if err := verifyStartedContainer(context.Background(), plan); err == nil || !strings.Contains(err.Error(), "restarted unexpectedly") {
+		t.Fatalf("expected restart count verification failure, got %v", err)
+	}
+	if err := waitForStartedContainerHealthy(context.Background(), plan); err == nil || !strings.Contains(err.Error(), "restarted unexpectedly") {
+		t.Fatalf("expected restart count health wait failure, got %v", err)
 	}
 }
 
@@ -3882,7 +3906,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -4536,7 +4560,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -4622,7 +4646,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -4822,7 +4846,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -4912,7 +4936,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)
@@ -5000,7 +5024,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.State.Running*)
-      echo "true false false false false healthy true dep_test tenant_demo node_local"
+      echo "true false false false false healthy true dep_test tenant_demo node_local 0"
       exit 0
       ;;
     *luma.managed*)

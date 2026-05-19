@@ -1331,6 +1331,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
 		return fmt.Errorf("docker container %q has unsafe runtime state after start", plan.ContainerName)
 	}
+	if state.RestartCount != 0 {
+		return fmt.Errorf("docker container %q restarted unexpectedly after start", plan.ContainerName)
+	}
 	if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID || state.NodeID != plan.NodeID {
 		return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
 	}
@@ -1369,6 +1372,7 @@ type startedContainerState struct {
 	DeploymentID string
 	TenantID     string
 	NodeID       string
+	RestartCount int
 }
 
 func inspectStartedContainerState(ctx context.Context, containerName string) (startedContainerState, error) {
@@ -1377,14 +1381,14 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .State.Running }} {{ .State.Paused }} {{ .State.Restarting }} {{ .State.Dead }} {{ .State.OOMKilled }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }}`,
+		`{{ .State.Running }} {{ .State.Paused }} {{ .State.Restarting }} {{ .State.Dead }} {{ .State.OOMKilled }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }} {{ .RestartCount }}`,
 		containerName,
 	).CombinedOutput()
 	if err != nil {
 		return startedContainerState{}, fmt.Errorf("docker container state inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 10 {
+	if len(fields) < 11 {
 		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned incomplete data", containerName)
 	}
 	running, err := dockerInspectBool(fields[0], "running", containerName)
@@ -1411,6 +1415,10 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 	if err != nil {
 		return startedContainerState{}, err
 	}
+	restartCount, err := strconv.Atoi(fields[10])
+	if err != nil || restartCount < 0 {
+		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned invalid restart count %q", containerName, fields[10])
+	}
 	return startedContainerState{
 		Running:      running,
 		Paused:       paused,
@@ -1422,6 +1430,7 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 		DeploymentID: fields[7],
 		TenantID:     fields[8],
 		NodeID:       fields[9],
+		RestartCount: restartCount,
 	}, nil
 }
 
@@ -1449,6 +1458,9 @@ func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) er
 		}
 		if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
 			return fmt.Errorf("docker container %q has unsafe runtime state before becoming healthy", plan.ContainerName)
+		}
+		if state.RestartCount != 0 {
+			return fmt.Errorf("docker container %q restarted unexpectedly before becoming healthy", plan.ContainerName)
 		}
 		if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID || state.NodeID != plan.NodeID {
 			return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
