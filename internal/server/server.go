@@ -81,6 +81,25 @@ type RuntimeStatus struct {
 var containerHealthWait = 2 * time.Minute
 var containerHealthPoll = 2 * time.Second
 
+var requiredDockerMaskedPaths = []string{
+	"/proc/acpi",
+	"/proc/kcore",
+	"/proc/keys",
+	"/proc/latency_stats",
+	"/proc/sched_debug",
+	"/proc/timer_list",
+	"/sys/firmware",
+}
+
+var requiredDockerReadonlyPaths = []string{
+	"/proc/asound",
+	"/proc/bus",
+	"/proc/fs",
+	"/proc/irq",
+	"/proc/sys",
+	"/proc/sysrq-trigger",
+}
+
 type hostCapacity struct {
 	CPUCores float64
 	MemoryMB int
@@ -1648,7 +1667,7 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ if $binding.HostIp }}{{ $binding.HostIp }}{{ else }}*{{ end }}:{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }} {{ if .HostConfig.CapAdd }}{{ range .HostConfig.CapAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.GroupAdd }}{{ range .HostConfig.GroupAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ len .HostConfig.Devices }} {{ len .HostConfig.DeviceRequests }} {{ if .HostConfig.VolumesFrom }}{{ range .HostConfig.VolumesFrom }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Binds }}{{ range .HostConfig.Binds }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.CgroupParent }}{{ .HostConfig.CgroupParent }}{{ else }}none{{ end }} {{ len .HostConfig.Sysctls }} {{ if .HostConfig.Runtime }}{{ .HostConfig.Runtime }}{{ else }}none{{ end }} {{ if .HostConfig.Isolation }}{{ .HostConfig.Isolation }}{{ else }}none{{ end }} {{ .HostConfig.OomScoreAdj }} {{ len .HostConfig.Ulimits }} {{ if .Config.StopSignal }}{{ .Config.StopSignal }}{{ else }}none{{ end }} {{ len .HostConfig.MaskedPaths }} {{ len .HostConfig.ReadonlyPaths }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ if $binding.HostIp }}{{ $binding.HostIp }}{{ else }}*{{ end }}:{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }} {{ if .HostConfig.CapAdd }}{{ range .HostConfig.CapAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.GroupAdd }}{{ range .HostConfig.GroupAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ len .HostConfig.Devices }} {{ len .HostConfig.DeviceRequests }} {{ if .HostConfig.VolumesFrom }}{{ range .HostConfig.VolumesFrom }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Binds }}{{ range .HostConfig.Binds }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.CgroupParent }}{{ .HostConfig.CgroupParent }}{{ else }}none{{ end }} {{ len .HostConfig.Sysctls }} {{ if .HostConfig.Runtime }}{{ .HostConfig.Runtime }}{{ else }}none{{ end }} {{ if .HostConfig.Isolation }}{{ .HostConfig.Isolation }}{{ else }}none{{ end }} {{ .HostConfig.OomScoreAdj }} {{ len .HostConfig.Ulimits }} {{ if .Config.StopSignal }}{{ .Config.StopSignal }}{{ else }}none{{ end }} {{ if .HostConfig.MaskedPaths }}{{ range .HostConfig.MaskedPaths }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ReadonlyPaths }}{{ range .HostConfig.ReadonlyPaths }}{{ . }},{{ end }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
@@ -1756,10 +1775,10 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if fields[41] != defaultContainerStopSignal {
 		return fmt.Errorf("docker container %q did not keep expected stop signal", plan.ContainerName)
 	}
-	if maskedPathCount, err := strconv.Atoi(fields[42]); err != nil || maskedPathCount <= 0 {
+	if !commaListContainsAll(fields[42], requiredDockerMaskedPaths) {
 		return fmt.Errorf("docker container %q lost Docker masked kernel path protections", plan.ContainerName)
 	}
-	if readonlyPathCount, err := strconv.Atoi(fields[43]); err != nil || readonlyPathCount <= 0 {
+	if !commaListContainsAll(fields[43], requiredDockerReadonlyPaths) {
 		return fmt.Errorf("docker container %q lost Docker read-only kernel path protections", plan.ContainerName)
 	}
 	if fields[15] != defaultContainerUser {
@@ -1779,6 +1798,22 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		return fmt.Errorf("docker container %q did not keep exact security options", plan.ContainerName)
 	}
 	return nil
+}
+
+func commaListContainsAll(actual string, required []string) bool {
+	values := map[string]struct{}{}
+	for _, value := range strings.Split(actual, ",") {
+		value = strings.TrimSpace(value)
+		if value != "" && value != "none" {
+			values[value] = struct{}{}
+		}
+	}
+	for _, value := range required {
+		if _, ok := values[value]; !ok {
+			return false
+		}
+	}
+	return true
 }
 
 func containerPortBindingsMatch(ports []PortPlan, actual string) bool {
