@@ -17,6 +17,7 @@ import (
 
 const defaultContainerPidsLimit = 512
 const defaultContainerUser = "10000:10000"
+const defaultContainerWorkingDir = "/"
 const defaultContainerUsernsMode = "private"
 const defaultContainerPidMode = "private"
 const defaultContainerUTSMode = "private"
@@ -667,6 +668,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--oom-score-adj", strconv.Itoa(defaultContainerOomScoreAdj),
 		"--pull", "never",
 		"--entrypoint", "",
+		"--workdir", defaultContainerWorkingDir,
 		"--network", job.Network.Name,
 		"--security-opt", "no-new-privileges=true",
 		"--security-opt", "seccomp=" + job.Security.SeccompProfile,

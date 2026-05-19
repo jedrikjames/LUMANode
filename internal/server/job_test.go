@@ -122,6 +122,8 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"never",
 		"--entrypoint",
 		"",
+		"--workdir",
+		"/",
 		"--network",
 		"luma-tenant_demo",
 		"--security-opt",
@@ -175,6 +177,21 @@ func TestDockerRunArgsClearsImageEntrypoint(t *testing.T) {
 	}
 	if image < 0 || entrypoint > image {
 		t.Fatalf("expected entrypoint reset before image argument, got %#v", args)
+	}
+}
+
+func TestDockerRunArgsPinsWorkingDirectory(t *testing.T) {
+	args, err := dockerRunArgs(sampleJob())
+	if err != nil {
+		t.Fatalf("dockerRunArgs returned error: %v", err)
+	}
+	workdir := slices.Index(args, "--workdir")
+	image := slices.Index(args, "nginx:1.27-alpine")
+	if workdir < 0 || workdir+1 >= len(args) || args[workdir+1] != "/" {
+		t.Fatalf("expected docker run to pin working directory, got %#v", args)
+	}
+	if image < 0 || workdir > image {
+		t.Fatalf("expected working directory pin before image argument, got %#v", args)
 	}
 }
 
@@ -2551,7 +2568,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *json\ .*)
-      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2658,7 +2675,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *json\ .*)
-      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2762,7 +2779,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *json\ .*)
-      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2874,7 +2891,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *json\ .*)
-      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -2980,7 +2997,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *json\ .*)
-      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
+      echo '{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g '\''daemon off;'\''"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}'
       exit 0
       ;;
     *.State.Running*)
@@ -3227,37 +3244,42 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 	}{
 		{
 			name:     "entrypoint",
-			output:   `{"Config":{"Entrypoint":["/docker-entrypoint.sh"],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			output:   `{"Config":{"Entrypoint":["/docker-entrypoint.sh"],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: "unexpected image entrypoint",
 		},
 		{
 			name:     "command",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","sleep 999"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","sleep 999"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: "startup command",
 		},
 		{
+			name:     "working-dir",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/app","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "working directory",
+		},
+		{
 			name:     "signed-env",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
 			contains: `environment variable "LUMA_TENANT_ID"`,
 		},
 		{
 			name:     "reserved-env",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_other","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_other","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: `environment variable "LUMA_DEPLOYMENT_ID"`,
 		},
 		{
 			name:     "malformed-env",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","BROKEN"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","BROKEN"]}}`,
 			contains: "malformed environment entry",
 		},
 		{
 			name:     "duplicate-env",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","LUMA_TENANT_ID=tenant_demo"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: `duplicate environment variable "LUMA_TENANT_ID"`,
 		},
 		{
 			name:     "unexpected-luma-env",
-			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","LUMA_IMAGE_HINT=spoofed"]}}`,
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo","LUMA_IMAGE_HINT=spoofed"]}}`,
 			contains: `unexpected LUMA environment variable "LUMA_IMAGE_HINT"`,
 		},
 	}
@@ -3295,7 +3317,7 @@ fi
 exit 1
 `)
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
 	plan, err := deploymentPlan(sampleJob())
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
