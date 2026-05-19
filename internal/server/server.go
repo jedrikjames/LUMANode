@@ -62,6 +62,7 @@ type RuntimeStatus struct {
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
+	DockerDefaultRuntimeRunc     bool              `json:"dockerDefaultRuntimeRunc"`
 	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
@@ -769,6 +770,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerLiveRestore"] = "docker daemon live-restore is not enabled"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DefaultRuntime}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerDefaultRuntime"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerDefaultRuntime"] == "" {
+				status.Errors["dockerDefaultRuntime"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "runc") {
+			status.DockerDefaultRuntimeRunc = true
+		} else {
+			status.Errors["dockerDefaultRuntime"] = "docker default runtime must be runc"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DockerRootDir}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerRootDir"] = strings.TrimSpace(string(output))
@@ -871,7 +883,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
