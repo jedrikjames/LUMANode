@@ -819,6 +819,20 @@ func TestParseNftManagedRuleRejectsUnsafeHandles(t *testing.T) {
 	}
 }
 
+func TestParseNftManagedRuleRejectsUnsafeComments(t *testing.T) {
+	cases := []string{
+		`tcp dport 8080 accept comment "luma:dep_test:8080/tcp;reboot" # handle 12`,
+		`tcp dport 8080 accept comment "luma:dep_test:bad rule" # handle 12`,
+		`tcp dport 8080 accept comment "luma:dep_test:bad\"quote" # handle 12`,
+		`tcp dport 8080 accept comment "luma:dep_test:bad$rule" # handle 12`,
+	}
+	for _, line := range cases {
+		if _, ok := parseNftManagedRule(line); ok {
+			t.Fatalf("expected unsafe nft comment to be rejected: %s", line)
+		}
+	}
+}
+
 func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 	cases := []struct {
 		name string

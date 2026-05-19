@@ -2333,6 +2333,9 @@ func parseNftManagedRule(line string) (nftManagedRule, bool) {
 		return nftManagedRule{}, false
 	}
 	comment := line[commentValueStart : commentValueStart+commentValueEnd]
+	if !validNftManagedComment(comment) {
+		return nftManagedRule{}, false
+	}
 	handleStart := strings.Index(line, "# handle ")
 	if handleStart < 0 {
 		return nftManagedRule{}, false
@@ -2348,6 +2351,22 @@ func parseNftManagedRule(line string) (nftManagedRule, bool) {
 		}
 	}
 	return nftManagedRule{Comment: comment, Handle: handle}, true
+}
+
+func validNftManagedComment(comment string) bool {
+	if !strings.HasPrefix(comment, "luma:") || len(comment) > 128 {
+		return false
+	}
+	for _, r := range comment {
+		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			continue
+		}
+		if r == ':' || r == '/' || r == '.' || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func reconcileDeploymentFirewall(ctx context.Context, deploymentID string, desired map[string]struct{}) error {
