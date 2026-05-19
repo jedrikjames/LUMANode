@@ -2117,7 +2117,7 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ if .HostConfig.MemorySwappiness }}{{ .HostConfig.MemorySwappiness }}{{ else }}0{{ end }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }} {{ .HostConfig.CpuRealtimeRuntime }} {{ .HostConfig.CpuRealtimePeriod }} {{ len .HostConfig.LogConfig.Config }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ if .HostConfig.MemorySwappiness }}{{ .HostConfig.MemorySwappiness }}{{ else }}0{{ end }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }} {{ .HostConfig.CpuRealtimeRuntime }} {{ .HostConfig.CpuRealtimePeriod }} {{ len .HostConfig.LogConfig.Config }} {{ len .HostConfig.StorageOpt }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
@@ -2144,6 +2144,9 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	expectedDiskLimit := strconv.Itoa(plan.Resources.DiskGB) + "g"
 	if fields[4] != expectedDiskLimit {
 		return fmt.Errorf("docker container %q did not keep expected writable layer size", plan.ContainerName)
+	}
+	if len(fields) == 27 && fields[25] == "4" && fields[26] != "1" {
+		return fmt.Errorf("docker container %q has unexpected storage options", plan.ContainerName)
 	}
 	shmBytes, shmErr := strconv.ParseInt(fields[5], 10, 64)
 	if shmErr != nil || shmBytes != defaultContainerShmBytes {
