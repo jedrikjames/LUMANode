@@ -3753,6 +3753,49 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerWorkloadRequiresSignedCustomLabels(t *testing.T) {
+	cases := []struct {
+		name     string
+		output   string
+		contains string
+	}{
+		{
+			name:     "missing",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `expected Docker label "com.example.tier"`,
+		},
+		{
+			name:     "drifted",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo","com.example.tier":"dev"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: `drifted Docker label "com.example.tier"`,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  printf '%s\n' "$DOCKER_WORKLOAD_OUTPUT"
+  exit 0
+fi
+exit 1
+`)
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			t.Setenv("DOCKER_WORKLOAD_OUTPUT", tt.output)
+			job := sampleJob()
+			job.Labels["com.example.tier"] = "prod"
+			plan, err := deploymentPlan(job)
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainerWorkload(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), tt.contains) {
+				t.Fatalf("expected %s verification failure, got %v", tt.contains, err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerWorkloadAllowsImageEnvironmentWithoutReservedDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh

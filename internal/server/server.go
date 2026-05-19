@@ -1564,7 +1564,7 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	if workload.Config.NetworkDisabled {
 		return fmt.Errorf("docker container %q has networking disabled outside the signed tenant network contract", plan.ContainerName)
 	}
-	if err := verifyStartedContainerLumaLabels(plan, workload.Config.Labels); err != nil {
+	if err := verifyStartedContainerLabels(plan, workload.Config.Labels); err != nil {
 		return err
 	}
 	if err := verifyStartedContainerExposedPorts(plan, workload.Config.ExposedPorts); err != nil {
@@ -1651,7 +1651,7 @@ func verifyStartedContainerExposedPorts(plan DeploymentPlan, exposedPorts map[st
 	return nil
 }
 
-func verifyStartedContainerLumaLabels(plan DeploymentPlan, actualLabels map[string]string) error {
+func verifyStartedContainerLabels(plan DeploymentPlan, actualLabels map[string]string) error {
 	if len(actualLabels) > maxContainerEffectiveLabels {
 		return fmt.Errorf("docker container %q has too many effective Docker labels", plan.ContainerName)
 	}
@@ -1671,11 +1671,18 @@ func verifyStartedContainerLumaLabels(plan DeploymentPlan, actualLabels map[stri
 		}
 	}
 	for key, expected := range plan.Labels {
-		if !strings.HasPrefix(key, "luma.") {
-			continue
+		actual, ok := actualLabels[key]
+		if !ok {
+			if strings.HasPrefix(key, "luma.") {
+				return fmt.Errorf("docker container %q did not keep expected LUMA label %q", plan.ContainerName, key)
+			}
+			return fmt.Errorf("docker container %q did not keep expected Docker label %q", plan.ContainerName, key)
 		}
-		if actualLabels[key] != expected {
-			return fmt.Errorf("docker container %q did not keep expected LUMA label %q", plan.ContainerName, key)
+		if actual != expected {
+			if strings.HasPrefix(key, "luma.") {
+				return fmt.Errorf("docker container %q did not keep expected LUMA label %q", plan.ContainerName, key)
+			}
+			return fmt.Errorf("docker container %q has drifted Docker label %q", plan.ContainerName, key)
 		}
 	}
 	return nil
