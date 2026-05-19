@@ -732,6 +732,23 @@ exit 1
 	}
 }
 
+func TestVerifyDeploymentEgressFirewallRejectsDuplicateRules(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+if [ "$1" = "-a" ] && [ "$6" = "forward" ]; then
+  echo 'ip saddr 172.18.0.4 drop comment "luma:dep_test:egress:drop" # handle 20'
+  echo 'ip saddr 172.18.0.4 drop comment "luma:dep_test:egress:drop" # handle 21'
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:drop": {}})
+	if err == nil || !strings.Contains(err.Error(), "duplicate deployment rule") {
+		t.Fatalf("expected duplicate egress rule verification failure, got %v", err)
+	}
+}
+
 func TestStaleDeploymentFirewallRulesOnlyTargetsCurrentDeployment(t *testing.T) {
 	output := `
 table inet lumapanel {

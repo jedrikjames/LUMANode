@@ -2508,6 +2508,9 @@ func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, de
 		if _, keep := desired[rule.Comment]; !keep {
 			return fmt.Errorf("nft egress verification found unexpected deployment rule %q", rule.Comment)
 		}
+		if _, duplicate := seen[rule.Comment]; duplicate {
+			return fmt.Errorf("nft egress verification found duplicate deployment rule %q", rule.Comment)
+		}
 		seen[rule.Comment] = struct{}{}
 	}
 	for comment := range desired {
