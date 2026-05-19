@@ -1445,12 +1445,14 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 }
 
 type dockerWorkloadInspect struct {
+	ID     string `json:"Id"`
 	Config struct {
 		Entrypoint      []string            `json:"Entrypoint"`
 		Cmd             []string            `json:"Cmd"`
 		Shell           []string            `json:"Shell"`
 		Env             []string            `json:"Env"`
 		WorkingDir      string              `json:"WorkingDir"`
+		Hostname        string              `json:"Hostname"`
 		OpenStdin       bool                `json:"OpenStdin"`
 		StdinOnce       bool                `json:"StdinOnce"`
 		Tty             bool                `json:"Tty"`
@@ -1485,6 +1487,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	}
 	if workload.Config.WorkingDir != defaultContainerWorkingDir {
 		return fmt.Errorf("docker container %q did not keep expected working directory", plan.ContainerName)
+	}
+	if workload.Config.Hostname != "" && workload.ID != "" && !dockerGeneratedHostname(workload.ID, workload.Config.Hostname) {
+		return fmt.Errorf("docker container %q has unexpected hostname override", plan.ContainerName)
 	}
 	if workload.Config.OpenStdin || workload.Config.StdinOnce || workload.Config.Tty {
 		return fmt.Errorf("docker container %q has unexpected interactive console settings", plan.ContainerName)
@@ -1736,8 +1741,8 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 	if fields[23] != "none" || fields[24] != "none" || fields[25] != "none" {
 		return fmt.Errorf("docker container %q has unexpected DNS overrides", plan.ContainerName)
 	}
-	if fields[26] != "none" || fields[27] != "none" {
-		return fmt.Errorf("docker container %q has unexpected hostname overrides", plan.ContainerName)
+	if fields[27] != "none" {
+		return fmt.Errorf("docker container %q has unexpected domainname override", plan.ContainerName)
 	}
 	if fields[28] != "none" {
 		return fmt.Errorf("docker container %q has unexpected MAC address override", plan.ContainerName)
@@ -1798,6 +1803,15 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		return fmt.Errorf("docker container %q did not keep exact security options", plan.ContainerName)
 	}
 	return nil
+}
+
+func dockerGeneratedHostname(containerID string, hostname string) bool {
+	containerID = strings.TrimSpace(containerID)
+	hostname = strings.TrimSpace(hostname)
+	if containerID == "" || hostname == "" {
+		return false
+	}
+	return len(hostname) >= 12 && strings.HasPrefix(containerID, hostname)
 }
 
 func commaListContainsAll(actual string, required []string) bool {

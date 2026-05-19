@@ -3333,6 +3333,11 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: "working directory",
 		},
 		{
+			name:     "hostname-override",
+			output:   `{"Id":"aabbccddeeff00112233445566778899","Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Hostname":"custom-host","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "hostname override",
+		},
+		{
 			name:     "open-stdin",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","OpenStdin":true,"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: "interactive console settings",
@@ -3462,7 +3467,7 @@ fi
 exit 1
 `)
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Volumes":{"/data":{}},"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
+	t.Setenv("DOCKER_WORKLOAD_OUTPUT", `{"Id":"aabbccddeeff00112233445566778899","Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Hostname":"aabbccddeeff","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Volumes":{"/data":{}},"Env":["PATH=/usr/local/bin","LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`)
 	plan, err := deploymentPlan(sampleJob())
 	if err != nil {
 		t.Fatalf("deploymentPlan returned error: %v", err)
@@ -4160,40 +4165,42 @@ exit 1
 	}
 }
 
-func TestVerifyStartedContainerIsolationRejectsHostnameOverrides(t *testing.T) {
-	cases := []struct {
-		name   string
-		output string
-	}{
-		{
-			name:   "hostname",
-			output: "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, 80/tcp=8080;, none none none none none custom-host none none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger,",
-		},
-		{
-			name:   "domainname",
-			output: "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, 80/tcp=8080;, none none none none none none example.internal none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger,",
-		},
-	}
-	for _, tt := range cases {
-		t.Run(tt.name, func(t *testing.T) {
-			tempDir := t.TempDir()
-			writeFakeCommand(t, tempDir, "docker", fmt.Sprintf(`#!/bin/sh
+func TestVerifyStartedContainerIsolationAllowsDockerGeneratedHostname(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo %q
+  echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, 80/tcp=8080;, none none none none none aabbccddeeff none none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger,"
   exit 0
 fi
 exit 1
-`, tt.output))
-			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-			plan, err := deploymentPlan(sampleJob())
-			if err != nil {
-				t.Fatalf("deploymentPlan returned error: %v", err)
-			}
-			err = verifyStartedContainerIsolation(context.Background(), plan)
-			if err == nil || !strings.Contains(err.Error(), "hostname overrides") {
-				t.Fatalf("expected hostname override verification failure, got %v", err)
-			}
-		})
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	if err := verifyStartedContainerIsolation(context.Background(), plan); err != nil {
+		t.Fatalf("expected Docker-generated hostname to pass isolation verification, got %v", err)
+	}
+}
+
+func TestVerifyStartedContainerIsolationRejectsDomainnameOverride(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "false true 512 none private private private private no true 30 false false false luma-tenant_demo 10000:10000 ALL, no-new-privileges=true,seccomp=lumapanel-default,apparmor=lumapanel-tenant, 1 luma-tenant_demo, 80/tcp=8080;, none none none none none none example.internal none none none 0 0 none none none 0 none none 0 0 SIGTERM /proc/acpi,/proc/kcore,/proc/keys,/proc/latency_stats,/proc/timer_list,/proc/sched_debug,/sys/firmware, /proc/asound,/proc/bus,/proc/fs,/proc/irq,/proc/sys,/proc/sysrq-trigger,"
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerIsolation(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "domainname override") {
+		t.Fatalf("expected domainname override verification failure, got %v", err)
 	}
 }
 
