@@ -1393,6 +1393,7 @@ type dockerWorkloadInspect struct {
 	Config struct {
 		Entrypoint   []string            `json:"Entrypoint"`
 		Cmd          []string            `json:"Cmd"`
+		Shell        []string            `json:"Shell"`
 		Env          []string            `json:"Env"`
 		WorkingDir   string              `json:"WorkingDir"`
 		OpenStdin    bool                `json:"OpenStdin"`
@@ -1422,6 +1423,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	expectedCommand := []string{"sh", "-lc", plan.Command}
 	if !slices.Equal(workload.Config.Cmd, expectedCommand) {
 		return fmt.Errorf("docker container %q did not keep expected startup command", plan.ContainerName)
+	}
+	if len(workload.Config.Shell) != 0 {
+		return fmt.Errorf("docker container %q kept unexpected image shell", plan.ContainerName)
 	}
 	if workload.Config.WorkingDir != defaultContainerWorkingDir {
 		return fmt.Errorf("docker container %q did not keep expected working directory", plan.ContainerName)
