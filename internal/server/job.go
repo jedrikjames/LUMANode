@@ -46,6 +46,7 @@ const maxContainerEnvValueLength = 4096
 const maxContainerLabels = 128
 const maxContainerEffectiveLabels = 256
 const maxEgressPolicyRules = 256
+const maxDeploymentSignatureClockSkew = 2 * time.Minute
 
 type DeployJob struct {
 	ID           string            `json:"id"`
@@ -168,15 +169,28 @@ func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Tim
 	if envelope.Signature.Algorithm != "hmac-sha256" {
 		return DeployJob{}, fmt.Errorf("unsupported deployment job signature algorithm")
 	}
+	if !validLumaIdentifier(envelope.Signature.KeyID) {
+		return DeployJob{}, fmt.Errorf("invalid deployment job signature key")
+	}
+	issuedAt, err := time.Parse(time.RFC3339, envelope.Signature.IssuedAt)
+	if err != nil {
+		return DeployJob{}, fmt.Errorf("invalid deployment job signature issue time")
+	}
+	if issuedAt.After(now.Add(maxDeploymentSignatureClockSkew)) {
+		return DeployJob{}, fmt.Errorf("deployment job signature issue time is in the future")
+	}
 	expiresAt, err := time.Parse(time.RFC3339, envelope.Signature.ExpiresAt)
 	if err != nil {
 		return DeployJob{}, fmt.Errorf("invalid deployment job signature expiry")
+	}
+	if !expiresAt.After(issuedAt) {
+		return DeployJob{}, fmt.Errorf("deployment job signature expiry must be after issue time")
 	}
 	if now.After(expiresAt) {
 		return DeployJob{}, fmt.Errorf("expired deployment job signature")
 	}
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(envelope.Payload))
+	mac.Write([]byte(deploymentJobSignaturePayload(envelope)))
 	expected := mac.Sum(nil)
 	actual, err := base64.RawURLEncoding.DecodeString(envelope.Signature.Value)
 	if err != nil {
@@ -194,6 +208,17 @@ func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Tim
 		return DeployJob{}, fmt.Errorf("invalid deployment job payload")
 	}
 	return job, nil
+}
+
+func deploymentJobSignaturePayload(envelope signedDeployJob) string {
+	return fmt.Sprintf(
+		"algorithm:%s\nkeyId:%s\nissuedAt:%s\nexpiresAt:%s\npayload:%s",
+		envelope.Signature.Algorithm,
+		envelope.Signature.KeyID,
+		envelope.Signature.IssuedAt,
+		envelope.Signature.ExpiresAt,
+		envelope.Payload,
+	)
 }
 
 func validateDeploymentJob(job DeployJob, nodeID string) error {

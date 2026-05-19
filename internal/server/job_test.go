@@ -1416,13 +1416,14 @@ func signSampleJob(t *testing.T, job DeployJob, secret string, expiresAt time.Ti
 	}
 	payload := base64.RawURLEncoding.EncodeToString(payloadJSON)
 	mac := hmac.New(sha256.New, []byte(secret))
-	mac.Write([]byte(payload))
 	var envelope signedDeployJob
 	envelope.Payload = payload
 	envelope.Signature.Algorithm = "hmac-sha256"
 	envelope.Signature.KeyID = "luma-job-v1"
-	envelope.Signature.IssuedAt = expiresAt.Add(-time.Minute).Format(time.RFC3339)
+	envelope.Signature.IssuedAt = expiresAt.Add(-10 * time.Minute).Format(time.RFC3339)
 	envelope.Signature.ExpiresAt = expiresAt.Format(time.RFC3339)
+	mac.Reset()
+	mac.Write([]byte(deploymentJobSignaturePayload(envelope)))
 	envelope.Signature.Value = base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 	return envelope
 }
@@ -1451,6 +1452,29 @@ func TestVerifySignedDeployJobRejectsExpiredEnvelope(t *testing.T) {
 	envelope := signSampleJob(t, sampleJob(), secret, now.Add(-time.Minute))
 	if _, err := verifySignedDeployJob(envelope, secret, now); err == nil {
 		t.Fatal("expected expired signature to fail")
+	}
+}
+
+func TestVerifySignedDeployJobRejectsTamperedExpiry(t *testing.T) {
+	secret := "test-signing-secret"
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	envelope := signSampleJob(t, sampleJob(), secret, now.Add(10*time.Minute))
+	envelope.Signature.ExpiresAt = now.Add(30 * time.Minute).Format(time.RFC3339)
+	if _, err := verifySignedDeployJob(envelope, secret, now); err == nil {
+		t.Fatal("expected tampered signature expiry to fail")
+	}
+}
+
+func TestVerifySignedDeployJobRejectsFutureIssueTime(t *testing.T) {
+	secret := "test-signing-secret"
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	envelope := signSampleJob(t, sampleJob(), secret, now.Add(10*time.Minute))
+	envelope.Signature.IssuedAt = now.Add(5 * time.Minute).Format(time.RFC3339)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(deploymentJobSignaturePayload(envelope)))
+	envelope.Signature.Value = base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if _, err := verifySignedDeployJob(envelope, secret, now); err == nil || !strings.Contains(err.Error(), "future") {
+		t.Fatalf("expected future issue time to fail, got %v", err)
 	}
 }
 
