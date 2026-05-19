@@ -1432,6 +1432,13 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 			return fmt.Errorf("docker container %q did not keep expected environment variable %q", plan.ContainerName, key)
 		}
 	}
+	for key := range actualEnv {
+		if strings.HasPrefix(key, "LUMA_") {
+			if _, expected := plan.Env[key]; !expected {
+				return fmt.Errorf("docker container %q has unexpected LUMA environment variable %q", plan.ContainerName, key)
+			}
+		}
+	}
 	reserved := map[string]string{
 		"LUMA_DEPLOYMENT_ID": plan.DeploymentID,
 		"LUMA_TENANT_ID":     plan.TenantID,
