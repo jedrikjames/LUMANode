@@ -2028,6 +2028,9 @@ func exactSecurityOptions(options []string, expected []string) bool {
 		if option == "" {
 			continue
 		}
+		if actualSet[option] {
+			return false
+		}
 		actualSet[option] = true
 	}
 	if len(actualSet) != len(expected) {
