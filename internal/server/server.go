@@ -823,7 +823,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else if protected {
 			status.DockerRootDirProtected = true
 		} else {
-			status.Errors["dockerRootDir"] = "docker root directory must not be world-writable"
+			status.Errors["dockerRootDir"] = "docker root directory must not be group- or world-writable"
 		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Driver}}").CombinedOutput()
 		if err != nil {
@@ -1011,7 +1011,7 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !info.IsDir() {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
-	return info.Mode().Perm()&0o002 == 0, nil
+	return info.Mode().Perm()&0o022 == 0, nil
 }
 
 func dockerOverlaySupportsDType(raw string) bool {

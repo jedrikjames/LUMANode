@@ -2057,6 +2057,21 @@ exit 0
 	}
 }
 
+func TestDockerRootDirProtectedRejectsGroupWritableDirectory(t *testing.T) {
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o770); err != nil {
+		t.Fatalf("create docker root dir: %v", err)
+	}
+	if err := os.Chmod(rootDir, 0o770); err != nil {
+		t.Fatalf("chmod docker root dir: %v", err)
+	}
+	protected, err := dockerRootDirProtected(rootDir)
+	if err != nil || protected {
+		t.Fatalf("expected group-writable Docker root directory to be unprotected, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestDockerRootDirProtectedRejectsSymlink(t *testing.T) {
 	tempDir := t.TempDir()
 	rootDir := filepath.Join(tempDir, "docker-root")
