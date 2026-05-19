@@ -1391,13 +1391,16 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 
 type dockerWorkloadInspect struct {
 	Config struct {
-		Entrypoint []string `json:"Entrypoint"`
-		Cmd        []string `json:"Cmd"`
-		Env        []string `json:"Env"`
-		WorkingDir string   `json:"WorkingDir"`
-		OpenStdin  bool     `json:"OpenStdin"`
-		StdinOnce  bool     `json:"StdinOnce"`
-		Tty        bool     `json:"Tty"`
+		Entrypoint   []string `json:"Entrypoint"`
+		Cmd          []string `json:"Cmd"`
+		Env          []string `json:"Env"`
+		WorkingDir   string   `json:"WorkingDir"`
+		OpenStdin    bool     `json:"OpenStdin"`
+		StdinOnce    bool     `json:"StdinOnce"`
+		Tty          bool     `json:"Tty"`
+		AttachStdin  bool     `json:"AttachStdin"`
+		AttachStdout bool     `json:"AttachStdout"`
+		AttachStderr bool     `json:"AttachStderr"`
 	} `json:"Config"`
 }
 
@@ -1422,6 +1425,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	}
 	if workload.Config.OpenStdin || workload.Config.StdinOnce || workload.Config.Tty {
 		return fmt.Errorf("docker container %q has unexpected interactive console settings", plan.ContainerName)
+	}
+	if workload.Config.AttachStdin || workload.Config.AttachStdout || workload.Config.AttachStderr {
+		return fmt.Errorf("docker container %q has unexpected attach stream settings", plan.ContainerName)
 	}
 	actualEnv := map[string]string{}
 	for _, item := range workload.Config.Env {
