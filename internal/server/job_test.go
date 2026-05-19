@@ -3258,6 +3258,21 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: "working directory",
 		},
 		{
+			name:     "open-stdin",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","OpenStdin":true,"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "interactive console settings",
+		},
+		{
+			name:     "stdin-once",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","StdinOnce":true,"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "interactive console settings",
+		},
+		{
+			name:     "tty",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Tty":true,"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "interactive console settings",
+		},
+		{
 			name:     "signed-env",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_other"]}}`,
 			contains: `environment variable "LUMA_TENANT_ID"`,

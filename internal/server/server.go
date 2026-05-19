@@ -1395,6 +1395,9 @@ type dockerWorkloadInspect struct {
 		Cmd        []string `json:"Cmd"`
 		Env        []string `json:"Env"`
 		WorkingDir string   `json:"WorkingDir"`
+		OpenStdin  bool     `json:"OpenStdin"`
+		StdinOnce  bool     `json:"StdinOnce"`
+		Tty        bool     `json:"Tty"`
 	} `json:"Config"`
 }
 
@@ -1416,6 +1419,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	}
 	if workload.Config.WorkingDir != defaultContainerWorkingDir {
 		return fmt.Errorf("docker container %q did not keep expected working directory", plan.ContainerName)
+	}
+	if workload.Config.OpenStdin || workload.Config.StdinOnce || workload.Config.Tty {
+		return fmt.Errorf("docker container %q has unexpected interactive console settings", plan.ContainerName)
 	}
 	actualEnv := map[string]string{}
 	for _, item := range workload.Config.Env {
