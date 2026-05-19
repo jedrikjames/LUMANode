@@ -1422,6 +1422,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 		if !ok {
 			return fmt.Errorf("docker container %q has malformed environment entry", plan.ContainerName)
 		}
+		if _, exists := actualEnv[key]; exists {
+			return fmt.Errorf("docker container %q has duplicate environment variable %q", plan.ContainerName, key)
+		}
 		actualEnv[key] = value
 	}
 	for key, expected := range plan.Env {
