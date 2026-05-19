@@ -1455,6 +1455,16 @@ func TestVerifySignedDeployJobRejectsExpiredEnvelope(t *testing.T) {
 	}
 }
 
+func TestVerifySignedDeployJobRejectsInvalidSignatureLength(t *testing.T) {
+	secret := "test-signing-secret"
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	envelope := signSampleJob(t, sampleJob(), secret, now.Add(10*time.Minute))
+	envelope.Signature.Value = envelope.Signature.Value + "A"
+	if _, err := verifySignedDeployJob(envelope, secret, now); err == nil || !strings.Contains(err.Error(), "signature length") {
+		t.Fatalf("expected invalid signature length to fail, got %v", err)
+	}
+}
+
 func TestVerifySignedDeployJobRejectsTamperedExpiry(t *testing.T) {
 	secret := "test-signing-secret"
 	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)

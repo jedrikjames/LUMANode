@@ -196,9 +196,15 @@ func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Tim
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(deploymentJobSignaturePayload(envelope)))
 	expected := mac.Sum(nil)
+	if len(envelope.Signature.Value) != base64.RawURLEncoding.EncodedLen(sha256.Size) {
+		return DeployJob{}, fmt.Errorf("invalid deployment job signature length")
+	}
 	actual, err := base64.RawURLEncoding.DecodeString(envelope.Signature.Value)
 	if err != nil {
 		return DeployJob{}, fmt.Errorf("invalid deployment job signature encoding")
+	}
+	if len(actual) != sha256.Size {
+		return DeployJob{}, fmt.Errorf("invalid deployment job signature length")
 	}
 	if !hmac.Equal(actual, expected) {
 		return DeployJob{}, fmt.Errorf("invalid deployment job signature")
