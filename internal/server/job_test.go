@@ -1954,6 +1954,13 @@ func TestDockerSocketProtectedRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestDockerSocketProtectedRejectsRelativePath(t *testing.T) {
+	protected, err := dockerSocketProtected("unix://docker.sock")
+	if err == nil || !strings.Contains(err.Error(), "not absolute") || protected {
+		t.Fatalf("expected relative docker socket path rejection, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestRuntimeStatusRejectsWorldWritableDockerRootDir(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")

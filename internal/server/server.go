@@ -980,6 +980,9 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if socketPath == "" {
 		return false, fmt.Errorf("docker unix socket path is empty")
 	}
+	if !filepath.IsAbs(socketPath) {
+		return false, fmt.Errorf("docker unix socket path %q is not absolute", socketPath)
+	}
 	info, err := os.Lstat(socketPath)
 	if err != nil {
 		return false, fmt.Errorf("docker unix socket stat failed: %w", err)
