@@ -1328,6 +1328,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if !state.Running {
 		return fmt.Errorf("docker container %q is not running after start", plan.ContainerName)
 	}
+	if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
+		return fmt.Errorf("docker container %q has unsafe runtime state after start", plan.ContainerName)
+	}
 	if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID || state.NodeID != plan.NodeID {
 		return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
 	}
@@ -1357,6 +1360,10 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 
 type startedContainerState struct {
 	Running      bool
+	Paused       bool
+	Restarting   bool
+	Dead         bool
+	OOMKilled    bool
 	Health       string
 	Managed      bool
 	DeploymentID string
@@ -1370,23 +1377,27 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .State.Running }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }}`,
+		`{{ .State.Running }} {{ .State.Paused }} {{ .State.Restarting }} {{ .State.Dead }} {{ .State.OOMKilled }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }}`,
 		containerName,
 	).CombinedOutput()
 	if err != nil {
 		return startedContainerState{}, fmt.Errorf("docker container state inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 6 {
+	if len(fields) < 10 {
 		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned incomplete data", containerName)
 	}
 	return startedContainerState{
 		Running:      fields[0] == "true",
-		Health:       fields[1],
-		Managed:      fields[2] == "true",
-		DeploymentID: fields[3],
-		TenantID:     fields[4],
-		NodeID:       fields[5],
+		Paused:       fields[1] == "true",
+		Restarting:   fields[2] == "true",
+		Dead:         fields[3] == "true",
+		OOMKilled:    fields[4] == "true",
+		Health:       fields[5],
+		Managed:      fields[6] == "true",
+		DeploymentID: fields[7],
+		TenantID:     fields[8],
+		NodeID:       fields[9],
 	}, nil
 }
 
@@ -1400,6 +1411,9 @@ func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) er
 		}
 		if !state.Running {
 			return fmt.Errorf("docker container %q stopped before becoming healthy", plan.ContainerName)
+		}
+		if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
+			return fmt.Errorf("docker container %q has unsafe runtime state before becoming healthy", plan.ContainerName)
 		}
 		if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID || state.NodeID != plan.NodeID {
 			return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
