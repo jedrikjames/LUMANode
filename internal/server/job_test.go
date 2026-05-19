@@ -770,6 +770,26 @@ table inet lumapanel {
 	}
 }
 
+func TestStaleDeploymentFirewallRulesPrunesDuplicateDesiredRules(t *testing.T) {
+	output := `
+table inet lumapanel {
+  chain input {
+    tcp dport 8080 counter accept comment "luma:dep_test:8080/tcp" # handle 10
+    tcp dport 8080 counter accept comment "luma:dep_test:8080/tcp" # handle 11
+    tcp dport 8080 counter accept comment "luma:dep_other:8080/tcp" # handle 12
+  }
+}
+`
+	desired := map[string]struct{}{"luma:dep_test:8080/tcp": {}}
+	stale := staleDeploymentFirewallRules(output, "dep_test", desired)
+	if len(stale) != 1 {
+		t.Fatalf("expected one duplicate current-deployment rule to be stale, got %#v", stale)
+	}
+	if stale[0].Comment != "luma:dep_test:8080/tcp" || stale[0].Handle != "11" {
+		t.Fatalf("unexpected stale duplicate rule: %#v", stale[0])
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesFirewallRulesWhenDockerRunFails(t *testing.T) {
 	tempDir := t.TempDir()
 	dockerLog := filepath.Join(tempDir, "docker.log")

@@ -2313,6 +2313,7 @@ type nftManagedRule struct {
 func staleDeploymentFirewallRules(nftOutput string, deploymentID string, desired map[string]struct{}) []nftManagedRule {
 	prefix := "luma:" + deploymentID + ":"
 	var stale []nftManagedRule
+	seenDesired := map[string]struct{}{}
 	for _, line := range strings.Split(nftOutput, "\n") {
 		rule, ok := parseNftManagedRule(line)
 		if !ok || !strings.HasPrefix(rule.Comment, prefix) {
@@ -2320,7 +2321,13 @@ func staleDeploymentFirewallRules(nftOutput string, deploymentID string, desired
 		}
 		if _, keep := desired[rule.Comment]; !keep {
 			stale = append(stale, rule)
+			continue
 		}
+		if _, duplicate := seenDesired[rule.Comment]; duplicate {
+			stale = append(stale, rule)
+			continue
+		}
+		seenDesired[rule.Comment] = struct{}{}
 	}
 	return stale
 }
