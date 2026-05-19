@@ -30,6 +30,7 @@ const defaultContainerHealthRetries = 3
 const defaultContainerTmpfsSize = "64m"
 const defaultContainerShmSize = "64m"
 const defaultContainerShmBytes = 64 * 1024 * 1024
+const defaultContainerMemorySwappiness = 0
 const defaultContainerLogMaxSize = "10m"
 const defaultContainerLogMaxFile = "3"
 const defaultContainerLogMode = "non-blocking"
@@ -649,6 +650,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 		"--cpus", strconv.FormatFloat(job.Resources.CPUCores, 'f', -1, 64),
 		"--memory", memoryLimit,
 		"--memory-swap", memoryLimit,
+		"--memory-swappiness", strconv.Itoa(defaultContainerMemorySwappiness),
 		"--storage-opt", "size=" + diskLimit,
 		"--pids-limit", strconv.Itoa(defaultContainerPidsLimit),
 		"--shm-size", defaultContainerShmSize,

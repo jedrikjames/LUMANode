@@ -2018,14 +2018,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }}`,
+		`{{ .HostConfig.NanoCpus }} {{ .HostConfig.Memory }} {{ .HostConfig.MemorySwap }} {{ if .HostConfig.MemorySwappiness }}{{ .HostConfig.MemorySwappiness }}{{ else }}0{{ end }} {{ index .HostConfig.StorageOpt "size" }} {{ .HostConfig.ShmSize }} {{ .HostConfig.LogConfig.Type }} {{ index .HostConfig.LogConfig.Config "max-size" }} {{ index .HostConfig.LogConfig.Config "max-file" }} {{ index .HostConfig.LogConfig.Config "mode" }} {{ index .HostConfig.LogConfig.Config "max-buffer-size" }} {{ .HostConfig.MemoryReservation }} {{ .HostConfig.CpuShares }} {{ .HostConfig.CpuQuota }} {{ .HostConfig.CpuPeriod }} {{ if .HostConfig.CpusetCpus }}{{ .HostConfig.CpusetCpus }}{{ else }}none{{ end }} {{ if .HostConfig.CpusetMems }}{{ .HostConfig.CpusetMems }}{{ else }}none{{ end }} {{ .HostConfig.BlkioWeight }} {{ len .HostConfig.BlkioWeightDevice }} {{ len .HostConfig.BlkioDeviceReadBps }} {{ len .HostConfig.BlkioDeviceWriteBps }} {{ len .HostConfig.BlkioDeviceReadIOps }} {{ len .HostConfig.BlkioDeviceWriteIOps }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("docker container resource inspect failed: %w: %s", err, string(output))
 	}
 	fields := strings.Fields(strings.TrimSpace(string(output)))
-	if len(fields) < 22 {
+	if len(fields) < 23 {
 		return fmt.Errorf("docker container %q resource inspect returned incomplete data", plan.ContainerName)
 	}
 	expectedNanoCpus := int64(math.Round(plan.Resources.CPUCores * 1_000_000_000))
@@ -2039,27 +2039,30 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if memoryErr != nil || swapErr != nil || memoryBytes != expectedMemoryBytes || swapBytes != expectedMemoryBytes {
 		return fmt.Errorf("docker container %q did not keep expected memory limits", plan.ContainerName)
 	}
+	if fields[3] != strconv.Itoa(defaultContainerMemorySwappiness) {
+		return fmt.Errorf("docker container %q has unexpected memory swappiness", plan.ContainerName)
+	}
 	expectedDiskLimit := strconv.Itoa(plan.Resources.DiskGB) + "g"
-	if fields[3] != expectedDiskLimit {
+	if fields[4] != expectedDiskLimit {
 		return fmt.Errorf("docker container %q did not keep expected writable layer size", plan.ContainerName)
 	}
-	shmBytes, shmErr := strconv.ParseInt(fields[4], 10, 64)
+	shmBytes, shmErr := strconv.ParseInt(fields[5], 10, 64)
 	if shmErr != nil || shmBytes != defaultContainerShmBytes {
 		return fmt.Errorf("docker container %q did not keep expected shared memory size", plan.ContainerName)
 	}
-	if fields[5] != "json-file" || fields[6] != defaultContainerLogMaxSize || fields[7] != defaultContainerLogMaxFile || fields[8] != defaultContainerLogMode || fields[9] != defaultContainerLogMaxBufferSize {
+	if fields[6] != "json-file" || fields[7] != defaultContainerLogMaxSize || fields[8] != defaultContainerLogMaxFile || fields[9] != defaultContainerLogMode || fields[10] != defaultContainerLogMaxBufferSize {
 		return fmt.Errorf("docker container %q did not keep expected log rotation settings", plan.ContainerName)
 	}
-	if fields[10] != "0" {
+	if fields[11] != "0" {
 		return fmt.Errorf("docker container %q has unexpected memory reservation", plan.ContainerName)
 	}
-	if fields[11] != "0" || fields[12] != "0" || fields[13] != "0" {
+	if fields[12] != "0" || fields[13] != "0" || fields[14] != "0" {
 		return fmt.Errorf("docker container %q has unexpected CPU scheduler overrides", plan.ContainerName)
 	}
-	if fields[14] != "none" || fields[15] != "none" {
+	if fields[15] != "none" || fields[16] != "none" {
 		return fmt.Errorf("docker container %q has unexpected CPU set restrictions", plan.ContainerName)
 	}
-	for _, field := range fields[16:22] {
+	for _, field := range fields[17:23] {
 		if field != "0" {
 			return fmt.Errorf("docker container %q has unexpected block I/O scheduler overrides", plan.ContainerName)
 		}

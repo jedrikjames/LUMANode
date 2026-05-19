@@ -80,6 +80,8 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"512m",
 		"--memory-swap",
 		"512m",
+		"--memory-swappiness",
+		"0",
 		"--storage-opt",
 		"size=5g",
 		"--pids-limit",
@@ -2620,7 +2622,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2727,7 +2729,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2831,7 +2833,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -2943,7 +2945,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3049,7 +3051,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3144,7 +3146,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -3591,7 +3593,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4238,7 +4240,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4324,7 +4326,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4524,7 +4526,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4610,7 +4612,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4702,7 +4704,7 @@ if [ "$1" = "inspect" ]; then
       exit 0
       ;;
     *.HostConfig.NanoCpus*)
-      echo "1000000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+      echo "1000000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
       exit 0
       ;;
     *.HostConfig.Privileged*)
@@ -4769,7 +4771,7 @@ func TestVerifyStartedContainerResourcesRequiresSharedMemorySize(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
 if [ "$1" = "inspect" ]; then
-  echo "1500000000 536870912 536870912 5g 33554432 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
+  echo "1500000000 536870912 536870912 0 5g 33554432 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0"
   exit 0
 fi
 exit 1
@@ -4792,23 +4794,23 @@ func TestVerifyStartedContainerResourcesRequiresLogBackpressurePolicy(t *testing
 	}{
 		{
 			name:   "driver",
-			output: "1500000000 536870912 536870912 5g 67108864 local 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
+			output: "1500000000 536870912 536870912 0 5g 67108864 local 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
 		},
 		{
 			name:   "max-size",
-			output: "1500000000 536870912 536870912 5g 67108864 json-file 100m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
+			output: "1500000000 536870912 536870912 0 5g 67108864 json-file 100m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
 		},
 		{
 			name:   "max-file",
-			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 10 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
+			output: "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 10 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
 		},
 		{
 			name:   "mode",
-			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
+			output: "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
 		},
 		{
 			name:   "max-buffer-size",
-			output: "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 32m 0 0 0 0 none none 0 0 0 0 0 0",
+			output: "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 32m 0 0 0 0 none none 0 0 0 0 0 0",
 		},
 	}
 	for _, tt := range cases {
@@ -4836,62 +4838,67 @@ func TestVerifyStartedContainerResourcesRejectsSchedulerOverrides(t *testing.T) 
 	}{
 		{
 			name:     "memory-reservation",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 268435456 0 0 0 none none 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 268435456 0 0 0 none none 0 0 0 0 0 0",
 			contains: "memory reservation",
 		},
 		{
+			name:     "memory-swappiness",
+			output:   "1500000000 536870912 536870912 60 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 0",
+			contains: "memory swappiness",
+		},
+		{
 			name:     "cpu-shares",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 1024 0 0 none none 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 1024 0 0 none none 0 0 0 0 0 0",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpu-quota",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 100000 0 none none 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 100000 0 none none 0 0 0 0 0 0",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpu-period",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 100000 none none 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 100000 none none 0 0 0 0 0 0",
 			contains: "CPU scheduler overrides",
 		},
 		{
 			name:     "cpuset-cpus",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 0-1 none 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 0-1 none 0 0 0 0 0 0",
 			contains: "CPU set restrictions",
 		},
 		{
 			name:     "cpuset-mems",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none 0 0 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none 0 0 0 0 0 0 0",
 			contains: "CPU set restrictions",
 		},
 		{
 			name:     "blkio-weight",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 500 0 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 500 0 0 0 0 0",
 			contains: "block I/O scheduler overrides",
 		},
 		{
 			name:     "blkio-weight-device",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 1 0 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 1 0 0 0 0",
 			contains: "block I/O scheduler overrides",
 		},
 		{
 			name:     "blkio-read-bps",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 1 0 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 1 0 0 0",
 			contains: "block I/O scheduler overrides",
 		},
 		{
 			name:     "blkio-write-bps",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 1 0 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 1 0 0",
 			contains: "block I/O scheduler overrides",
 		},
 		{
 			name:     "blkio-read-iops",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 1 0",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 1 0",
 			contains: "block I/O scheduler overrides",
 		},
 		{
 			name:     "blkio-write-iops",
-			output:   "1500000000 536870912 536870912 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 1",
+			output:   "1500000000 536870912 536870912 0 5g 67108864 json-file 10m 3 non-blocking 4m 0 0 0 0 none none 0 0 0 0 0 1",
 			contains: "block I/O scheduler overrides",
 		},
 	}
