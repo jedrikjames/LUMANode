@@ -2631,6 +2631,12 @@ exit 0
 	if err == nil || !strings.Contains(err.Error(), "unexpected network mode") {
 		t.Fatalf("expected tenant network mode refusal, got %v", err)
 	}
+
+	t.Setenv("DOCKER_NETWORK_LABEL_OUTPUT", "true tenant_demo false bridge false false false true")
+	err = ensureTenantNetwork(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), "unexpected IPv6") {
+		t.Fatalf("expected tenant network IPv6 refusal, got %v", err)
+	}
 }
 
 func TestEnsureTenantNetworkVerifiesLabelsAfterCreate(t *testing.T) {
