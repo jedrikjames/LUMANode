@@ -2222,7 +2222,7 @@ func verifyTenantNetworkOwnership(ctx context.Context, plan DeploymentPlan) erro
 		"network",
 		"inspect",
 		"-f",
-		`{{ index .Labels "luma.managed" }} {{ index .Labels "luma.tenant" }} {{ index .Options "com.docker.network.bridge.enable_icc" }} {{ .Driver }} {{ .Internal }} {{ .Attachable }} {{ .Ingress }} {{ .EnableIPv6 }}`,
+		`{{ index .Labels "luma.managed" }} {{ index .Labels "luma.tenant" }} {{ index .Options "com.docker.network.bridge.enable_icc" }} {{ .Driver }} {{ .Internal }} {{ .Attachable }} {{ .Ingress }} {{ .EnableIPv6 }} {{ .Scope }}`,
 		networkName,
 	)
 	output, err := labelInspect.CombinedOutput()
@@ -2244,6 +2244,9 @@ func verifyTenantNetworkOwnership(ctx context.Context, plan DeploymentPlan) erro
 	}
 	if len(ownership) > 7 && ownership[7] != "false" {
 		return fmt.Errorf("docker network use refused for tenant network %q with unexpected IPv6", networkName)
+	}
+	if len(ownership) > 8 && ownership[8] != "local" {
+		return fmt.Errorf("docker network use refused for tenant network %q with unexpected scope", networkName)
 	}
 	return nil
 }
