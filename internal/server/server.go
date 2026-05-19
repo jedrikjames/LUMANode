@@ -1548,7 +1548,7 @@ func verifyStartedContainerIsolation(ctx context.Context, plan DeploymentPlan) e
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }} {{ if .HostConfig.CapAdd }}{{ range .HostConfig.CapAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.GroupAdd }}{{ range .HostConfig.GroupAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ len .HostConfig.Devices }} {{ len .HostConfig.DeviceRequests }} {{ if .HostConfig.VolumesFrom }}{{ range .HostConfig.VolumesFrom }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Binds }}{{ range .HostConfig.Binds }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.CgroupParent }}{{ .HostConfig.CgroupParent }}{{ else }}none{{ end }} {{ len .HostConfig.Sysctls }} {{ if .HostConfig.Runtime }}{{ .HostConfig.Runtime }}{{ else }}none{{ end }} {{ if .HostConfig.Isolation }}{{ .HostConfig.Isolation }}{{ else }}none{{ end }} {{ .HostConfig.OomScoreAdj }} {{ len .HostConfig.Ulimits }} {{ if .Config.StopSignal }}{{ .Config.StopSignal }}{{ else }}none{{ end }}`,
+		`{{ .HostConfig.Privileged }} {{ .HostConfig.ReadonlyRootfs }} {{ .HostConfig.PidsLimit }} {{ .HostConfig.IpcMode }} {{ .HostConfig.CgroupnsMode }} {{ .HostConfig.UsernsMode }} {{ .HostConfig.PidMode }} {{ .HostConfig.UTSMode }} {{ .HostConfig.RestartPolicy.Name }} {{ .HostConfig.Init }} {{ .HostConfig.StopTimeout }} {{ .HostConfig.AutoRemove }} {{ .HostConfig.PublishAllPorts }} {{ .HostConfig.OomKillDisable }} {{ .HostConfig.NetworkMode }} {{ .Config.User }} {{ range .HostConfig.CapDrop }}{{ . }},{{ end }} {{ range .HostConfig.SecurityOpt }}{{ . }},{{ end }} {{ len .NetworkSettings.Networks }} {{ range $name, $_ := .NetworkSettings.Networks }}{{ $name }},{{ end }} {{ if .HostConfig.PortBindings }}{{ range $port, $bindings := .HostConfig.PortBindings }}{{ $port }}={{ range $binding := $bindings }}{{ if $binding.HostIp }}{{ $binding.HostIp }}{{ else }}*{{ end }}:{{ $binding.HostPort }};{{ end }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Links }}{{ range .HostConfig.Links }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.ExtraHosts }}{{ range .HostConfig.ExtraHosts }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Dns }}{{ range .HostConfig.Dns }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsSearch }}{{ range .HostConfig.DnsSearch }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.DnsOptions }}{{ range .HostConfig.DnsOptions }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .Config.Hostname }}{{ .Config.Hostname }}{{ else }}none{{ end }} {{ if .Config.Domainname }}{{ .Config.Domainname }}{{ else }}none{{ end }} {{ if .Config.MacAddress }}{{ .Config.MacAddress }}{{ else }}none{{ end }} {{ if .HostConfig.CapAdd }}{{ range .HostConfig.CapAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.GroupAdd }}{{ range .HostConfig.GroupAdd }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ len .HostConfig.Devices }} {{ len .HostConfig.DeviceRequests }} {{ if .HostConfig.VolumesFrom }}{{ range .HostConfig.VolumesFrom }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.Binds }}{{ range .HostConfig.Binds }}{{ . }},{{ end }}{{ else }}none{{ end }} {{ if .HostConfig.CgroupParent }}{{ .HostConfig.CgroupParent }}{{ else }}none{{ end }} {{ len .HostConfig.Sysctls }} {{ if .HostConfig.Runtime }}{{ .HostConfig.Runtime }}{{ else }}none{{ end }} {{ if .HostConfig.Isolation }}{{ .HostConfig.Isolation }}{{ else }}none{{ end }} {{ .HostConfig.OomScoreAdj }} {{ len .HostConfig.Ulimits }} {{ if .Config.StopSignal }}{{ .Config.StopSignal }}{{ else }}none{{ end }}`,
 		plan.ContainerName,
 	).CombinedOutput()
 	if err != nil {
@@ -1695,10 +1695,52 @@ func containerPortBindingsMatch(ports []PortPlan, actual string) bool {
 		if binding == "" {
 			continue
 		}
-		normalizedActual = append(normalizedActual, binding)
+		normalized, ok := normalizePortBinding(binding)
+		if !ok {
+			return false
+		}
+		normalizedActual = append(normalizedActual, normalized)
 	}
 	sort.Strings(normalizedActual)
 	return slices.Equal(expected, normalizedActual)
+}
+
+func normalizePortBinding(binding string) (string, bool) {
+	portSpec, hostSpec, ok := strings.Cut(binding, "=")
+	if !ok || portSpec == "" || hostSpec == "" {
+		return "", false
+	}
+	entries := strings.Split(hostSpec, ";")
+	normalizedEntries := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		hostPort := entry
+		if separator := strings.LastIndex(entry, ":"); separator >= 0 {
+			hostIP := entry[:separator]
+			port := entry[separator+1:]
+			if !wildcardHostIP(hostIP) {
+				return "", false
+			}
+			hostPort = port
+		}
+		if hostPort == "" {
+			return "", false
+		}
+		normalizedEntries = append(normalizedEntries, hostPort)
+	}
+	if len(normalizedEntries) == 0 {
+		return "", false
+	}
+	sort.Strings(normalizedEntries)
+	return portSpec + "=" + strings.Join(normalizedEntries, ";") + ";", true
+}
+
+func wildcardHostIP(hostIP string) bool {
+	hostIP = strings.TrimSpace(hostIP)
+	return hostIP == "" || hostIP == "*" || hostIP == "0.0.0.0" || hostIP == "::"
 }
 
 func containsNetworkName(networks []string, target string) bool {

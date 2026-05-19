@@ -3810,6 +3810,15 @@ func TestContainerPortBindingsMatchSignedPlan(t *testing.T) {
 	if !containerPortBindingsMatch(plan.Ports, "80/tcp=8080;,") {
 		t.Fatal("expected signed TCP port binding to match Docker inspect output")
 	}
+	if !containerPortBindingsMatch(plan.Ports, "80/tcp=0.0.0.0:8080;,") {
+		t.Fatal("expected wildcard host IP port binding to match Docker inspect output")
+	}
+	if !containerPortBindingsMatch(plan.Ports, "80/tcp=:::8080;,") {
+		t.Fatal("expected IPv6 wildcard host IP port binding to match Docker inspect output")
+	}
+	if containerPortBindingsMatch(plan.Ports, "80/tcp=127.0.0.1:8080;,") {
+		t.Fatal("expected narrowed host IP port binding to fail")
+	}
 	if containerPortBindingsMatch(plan.Ports, "80/tcp=9090;,") {
 		t.Fatal("expected mismatched host port binding to fail")
 	}
