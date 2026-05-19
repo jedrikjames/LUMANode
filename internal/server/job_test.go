@@ -1478,6 +1478,19 @@ func TestVerifySignedDeployJobRejectsFutureIssueTime(t *testing.T) {
 	}
 }
 
+func TestVerifySignedDeployJobRejectsExcessiveLifetime(t *testing.T) {
+	secret := "test-signing-secret"
+	now := time.Date(2026, 5, 15, 12, 0, 0, 0, time.UTC)
+	envelope := signSampleJob(t, sampleJob(), secret, now.Add(10*time.Minute))
+	envelope.Signature.ExpiresAt = now.Add(30 * time.Minute).Format(time.RFC3339)
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(deploymentJobSignaturePayload(envelope)))
+	envelope.Signature.Value = base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+	if _, err := verifySignedDeployJob(envelope, secret, now); err == nil || !strings.Contains(err.Error(), "lifetime") {
+		t.Fatalf("expected excessive signature lifetime to fail, got %v", err)
+	}
+}
+
 func TestVerifyPeerCertificateRejectsRevokedFingerprint(t *testing.T) {
 	certificate := testCertificate(t)
 	fingerprint := certificateFingerprint(certificate)

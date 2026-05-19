@@ -47,6 +47,7 @@ const maxContainerLabels = 128
 const maxContainerEffectiveLabels = 256
 const maxEgressPolicyRules = 256
 const maxDeploymentSignatureClockSkew = 2 * time.Minute
+const maxDeploymentSignatureTTL = 10 * time.Minute
 
 type DeployJob struct {
 	ID           string            `json:"id"`
@@ -185,6 +186,9 @@ func verifySignedDeployJob(envelope signedDeployJob, secret string, now time.Tim
 	}
 	if !expiresAt.After(issuedAt) {
 		return DeployJob{}, fmt.Errorf("deployment job signature expiry must be after issue time")
+	}
+	if expiresAt.Sub(issuedAt) > maxDeploymentSignatureTTL {
+		return DeployJob{}, fmt.Errorf("deployment job signature lifetime is too long")
 	}
 	if now.After(expiresAt) {
 		return DeployJob{}, fmt.Errorf("expired deployment job signature")
