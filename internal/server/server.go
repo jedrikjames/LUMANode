@@ -1391,16 +1391,17 @@ func verifyStartedContainerImage(ctx context.Context, plan DeploymentPlan) error
 
 type dockerWorkloadInspect struct {
 	Config struct {
-		Entrypoint   []string `json:"Entrypoint"`
-		Cmd          []string `json:"Cmd"`
-		Env          []string `json:"Env"`
-		WorkingDir   string   `json:"WorkingDir"`
-		OpenStdin    bool     `json:"OpenStdin"`
-		StdinOnce    bool     `json:"StdinOnce"`
-		Tty          bool     `json:"Tty"`
-		AttachStdin  bool     `json:"AttachStdin"`
-		AttachStdout bool     `json:"AttachStdout"`
-		AttachStderr bool     `json:"AttachStderr"`
+		Entrypoint   []string          `json:"Entrypoint"`
+		Cmd          []string          `json:"Cmd"`
+		Env          []string          `json:"Env"`
+		WorkingDir   string            `json:"WorkingDir"`
+		OpenStdin    bool              `json:"OpenStdin"`
+		StdinOnce    bool              `json:"StdinOnce"`
+		Tty          bool              `json:"Tty"`
+		AttachStdin  bool              `json:"AttachStdin"`
+		AttachStdout bool              `json:"AttachStdout"`
+		AttachStderr bool              `json:"AttachStderr"`
+		Labels       map[string]string `json:"Labels"`
 	} `json:"Config"`
 }
 
@@ -1428,6 +1429,9 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	}
 	if workload.Config.AttachStdin || workload.Config.AttachStdout || workload.Config.AttachStderr {
 		return fmt.Errorf("docker container %q has unexpected attach stream settings", plan.ContainerName)
+	}
+	if err := verifyStartedContainerLumaLabels(plan, workload.Config.Labels); err != nil {
+		return err
 	}
 	actualEnv := map[string]string{}
 	for _, item := range workload.Config.Env {
@@ -1460,6 +1464,30 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	for key, expected := range reserved {
 		if actual, ok := actualEnv[key]; ok && actual != expected {
 			return fmt.Errorf("docker container %q has drifted reserved environment variable %q", plan.ContainerName, key)
+		}
+	}
+	return nil
+}
+
+func verifyStartedContainerLumaLabels(plan DeploymentPlan, actualLabels map[string]string) error {
+	for key, actual := range actualLabels {
+		if !strings.HasPrefix(key, "luma.") {
+			continue
+		}
+		expected, ok := plan.Labels[key]
+		if !ok {
+			return fmt.Errorf("docker container %q has unexpected LUMA label %q", plan.ContainerName, key)
+		}
+		if actual != expected {
+			return fmt.Errorf("docker container %q has drifted LUMA label %q", plan.ContainerName, key)
+		}
+	}
+	for key, expected := range plan.Labels {
+		if !strings.HasPrefix(key, "luma.") {
+			continue
+		}
+		if actualLabels[key] != expected {
+			return fmt.Errorf("docker container %q did not keep expected LUMA label %q", plan.ContainerName, key)
 		}
 	}
 	return nil

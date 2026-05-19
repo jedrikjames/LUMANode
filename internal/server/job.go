@@ -124,6 +124,7 @@ type DeploymentPlan struct {
 	ResolvedImage   string            `json:"resolvedImage,omitempty"`
 	Command         string            `json:"command"`
 	Env             map[string]string `json:"env,omitempty"`
+	Labels          map[string]string `json:"labels,omitempty"`
 	SeccompProfile  string            `json:"seccompProfile"`
 	AppArmorProfile string            `json:"appArmorProfile"`
 	Egress          EgressPolicy      `json:"egress"`
@@ -774,6 +775,7 @@ func deploymentPlan(job DeployJob) (DeploymentPlan, error) {
 		ResolvedImage:   resolvedContainerImage(job),
 		Command:         job.Command,
 		Env:             normalizedContainerEnv(job),
+		Labels:          normalizedContainerLabels(job),
 		SeccompProfile:  job.Security.SeccompProfile,
 		AppArmorProfile: job.Security.AppArmorProfile,
 		Egress: EgressPolicy{
@@ -818,6 +820,21 @@ func normalizedContainerEnv(job DeployJob) map[string]string {
 	env["LUMA_TENANT_ID"] = job.TenantID
 	env["LUMA_NODE_ID"] = job.NodeID
 	return env
+}
+
+func normalizedContainerLabels(job DeployJob) map[string]string {
+	labels := make(map[string]string, len(job.Labels)+4)
+	for key, value := range job.Labels {
+		if lumaOwnershipLabel(key) {
+			continue
+		}
+		labels[key] = value
+	}
+	labels["luma.managed"] = "true"
+	labels["luma.deployment"] = job.DeploymentID
+	labels["luma.tenant"] = job.TenantID
+	labels["luma.node"] = job.NodeID
+	return labels
 }
 
 func firewallCommands(job DeployJob) []CommandPlan {
