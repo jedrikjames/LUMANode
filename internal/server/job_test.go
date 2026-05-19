@@ -781,6 +781,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid image reference",
 		},
 		{
+			name: "unnormalized image reference",
+			edit: func(job *DeployJob) { job.Image = " nginx:1.27-alpine " },
+			want: "invalid image reference",
+		},
+		{
 			name: "url-like image reference",
 			edit: func(job *DeployJob) { job.Image = "https://registry.example.com/nginx:latest" },
 			want: "invalid image reference",

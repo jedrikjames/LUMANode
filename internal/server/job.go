@@ -557,7 +557,11 @@ func validConfinementProfile(profile string) bool {
 }
 
 func validImageReference(image string) bool {
-	image = strings.TrimSpace(image)
+	trimmed := strings.TrimSpace(image)
+	if image != trimmed {
+		return false
+	}
+	image = trimmed
 	if image == "" || len(image) > 512 || strings.ContainsAny(image, "\x00\r\n\t ") {
 		return false
 	}
