@@ -2337,6 +2337,62 @@ func TestDockerSocketProtectedRejectsWritableParentDirectory(t *testing.T) {
 	}
 }
 
+func TestDockerSocketProtectedRejectsNonRootOwnedSocketWhenPrivileged(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	tempDir := t.TempDir()
+	socketPath := filepath.Join(tempDir, "docker.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen on unix socket: %v", err)
+	}
+	defer listener.Close()
+	if err := os.Chmod(socketPath, 0o600); err != nil {
+		t.Fatalf("chmod protected socket: %v", err)
+	}
+	if err := os.Chown(socketPath, 65534, -1); err != nil {
+		t.Fatalf("chown docker socket: %v", err)
+	}
+
+	protected, err := dockerSocketProtected("unix://" + socketPath)
+	if err == nil || !strings.Contains(err.Error(), "root-owned") || protected {
+		t.Fatalf("expected non-root-owned Docker socket rejection, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerSocketProtectedRejectsNonRootOwnedParentWhenPrivileged(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	tempDir, err := os.MkdirTemp("", "lsp-")
+	if err != nil {
+		t.Fatalf("create short temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+	parentDir := filepath.Join(tempDir, "parent")
+	if err := os.Mkdir(parentDir, 0o700); err != nil {
+		t.Fatalf("create socket parent: %v", err)
+	}
+	socketPath := filepath.Join(parentDir, "docker.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen on unix socket: %v", err)
+	}
+	defer listener.Close()
+	if err := os.Chmod(socketPath, 0o600); err != nil {
+		t.Fatalf("chmod protected socket: %v", err)
+	}
+	if err := os.Chown(parentDir, 65534, -1); err != nil {
+		t.Fatalf("chown docker socket parent: %v", err)
+	}
+
+	protected, err := dockerSocketProtected("unix://" + socketPath)
+	if err == nil || !strings.Contains(err.Error(), "parent") || !strings.Contains(err.Error(), "root-owned") || protected {
+		t.Fatalf("expected non-root-owned Docker socket parent rejection, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestDockerSocketProtectedAllowsProtectedSymlinkParentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	realParent := filepath.Join(tempDir, "real-parent")
@@ -2505,6 +2561,47 @@ func TestDockerRootDirProtectedRejectsWritableParentDirectory(t *testing.T) {
 	protected, err := dockerRootDirProtected(rootDir)
 	if err == nil || !strings.Contains(err.Error(), "parent") || protected {
 		t.Fatalf("expected writable Docker root parent rejection, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerRootDirProtectedRejectsNonRootOwnedDirectoryWhenPrivileged(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	tempDir := t.TempDir()
+	rootDir := filepath.Join(tempDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o700); err != nil {
+		t.Fatalf("create docker root dir: %v", err)
+	}
+	if err := os.Chown(rootDir, 65534, -1); err != nil {
+		t.Fatalf("chown docker root dir: %v", err)
+	}
+
+	protected, err := dockerRootDirProtected(rootDir)
+	if err == nil || !strings.Contains(err.Error(), "root-owned") || protected {
+		t.Fatalf("expected non-root-owned Docker root directory rejection, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerRootDirProtectedRejectsNonRootOwnedParentWhenPrivileged(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	parentDir := filepath.Join(t.TempDir(), "root-parent")
+	if err := os.Mkdir(parentDir, 0o700); err != nil {
+		t.Fatalf("create docker root parent: %v", err)
+	}
+	rootDir := filepath.Join(parentDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o700); err != nil {
+		t.Fatalf("create docker root dir: %v", err)
+	}
+	if err := os.Chown(parentDir, 65534, -1); err != nil {
+		t.Fatalf("chown docker root parent: %v", err)
+	}
+
+	protected, err := dockerRootDirProtected(rootDir)
+	if err == nil || !strings.Contains(err.Error(), "parent") || !strings.Contains(err.Error(), "root-owned") || protected {
+		t.Fatalf("expected non-root-owned Docker root parent rejection, protected=%v err=%v", protected, err)
 	}
 }
 

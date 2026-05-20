@@ -1072,6 +1072,9 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if info.Mode()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
 	}
+	if err := requireRootOwnedWhenPrivileged("docker unix socket", socketPath, info); err != nil {
+		return false, err
+	}
 	parentPath := filepath.Dir(socketPath)
 	parentInfo, err := os.Stat(parentPath)
 	if err != nil {
@@ -1079,6 +1082,9 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	}
 	if !parentInfo.IsDir() {
 		return false, fmt.Errorf("docker unix socket parent %q is not a directory", parentPath)
+	}
+	if err := requireRootOwnedWhenPrivileged("docker unix socket parent", parentPath, parentInfo); err != nil {
+		return false, err
 	}
 	if parentInfo.Mode().Perm()&0o022 != 0 {
 		return false, fmt.Errorf("docker unix socket parent %q must not be group- or world-writable", parentPath)
@@ -1104,6 +1110,9 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !info.IsDir() {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
+	if err := requireRootOwnedWhenPrivileged("docker root directory", rootDir, info); err != nil {
+		return false, err
+	}
 	parentPath := filepath.Dir(rootDir)
 	parentInfo, err := os.Stat(parentPath)
 	if err != nil {
@@ -1112,10 +1121,27 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !parentInfo.IsDir() {
 		return false, fmt.Errorf("docker root directory parent %q is not a directory", parentPath)
 	}
+	if err := requireRootOwnedWhenPrivileged("docker root directory parent", parentPath, parentInfo); err != nil {
+		return false, err
+	}
 	if parentInfo.Mode().Perm()&0o022 != 0 {
 		return false, fmt.Errorf("docker root directory parent %q must not be group- or world-writable", parentPath)
 	}
 	return info.Mode().Perm()&0o022 == 0, nil
+}
+
+func requireRootOwnedWhenPrivileged(kind string, path string, info os.FileInfo) error {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	stat, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return fmt.Errorf("%s %q ownership could not be inspected", kind, path)
+	}
+	if stat.Uid != 0 {
+		return fmt.Errorf("%s %q must be root-owned", kind, path)
+	}
+	return nil
 }
 
 func dockerOverlaySupportsDType(raw string) bool {
