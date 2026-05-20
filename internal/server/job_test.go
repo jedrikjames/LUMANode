@@ -1086,6 +1086,11 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "mount target is unsafe",
 		},
 		{
+			name: "runtime state mount target",
+			edit: func(job *DeployJob) { job.Mounts[0].Target = "/var/lib/app" },
+			want: "mount target is unsafe",
+		},
+		{
 			name: "duplicate mount target",
 			edit: func(job *DeployJob) {
 				job.Mounts = append(job.Mounts, struct {
