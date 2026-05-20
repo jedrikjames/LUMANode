@@ -53,6 +53,7 @@ type RuntimeStatus struct {
 	Docker                       bool              `json:"docker"`
 	DockerCgroupV2               bool              `json:"dockerCgroupV2"`
 	DockerCgroupDriverSystemd    bool              `json:"dockerCgroupDriverSystemd"`
+	DockerCgroupNamespacePrivate bool              `json:"dockerCgroupNamespacePrivate"`
 	DockerDebugDisabled          bool              `json:"dockerDebugDisabled"`
 	DockerExperimentalDisabled   bool              `json:"dockerExperimentalDisabled"`
 	DockerSwarmInactive          bool              `json:"dockerSwarmInactive"`
@@ -693,6 +694,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerCgroupDriver"] = "docker cgroup driver must be systemd"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.CgroupNamespaceMode}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerCgroupNamespace"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerCgroupNamespace"] == "" {
+				status.Errors["dockerCgroupNamespace"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "private") {
+			status.DockerCgroupNamespacePrivate = true
+		} else {
+			status.Errors["dockerCgroupNamespace"] = "docker cgroup namespace mode must default to private"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Debug}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerDebug"] = strings.TrimSpace(string(output))
@@ -929,7 +941,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
