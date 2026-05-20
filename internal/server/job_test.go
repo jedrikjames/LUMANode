@@ -993,6 +993,16 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid image reference",
 		},
 		{
+			name: "multiple image tag separators",
+			edit: func(job *DeployJob) { job.Image = "nginx:latest:debug" },
+			want: "invalid image reference",
+		},
+		{
+			name: "image path component with tag separator",
+			edit: func(job *DeployJob) { job.Image = "registry.example.test/team:dev/nginx:latest" },
+			want: "invalid image reference",
+		},
+		{
 			name: "invalid image digest",
 			edit: func(job *DeployJob) { job.ImageDigest = "sha256:not-a-digest" },
 			want: "invalid image digest",

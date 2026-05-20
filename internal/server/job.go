@@ -636,9 +636,21 @@ func validImageReference(image string) bool {
 	if lastColon := strings.LastIndex(image, ":"); lastColon > lastSlash && lastColon == len(image)-1 {
 		return false
 	}
-	for _, component := range strings.Split(image, "/") {
+	components := strings.Split(image, "/")
+	for i, component := range components {
 		if component == "" || component == "." || component == ".." {
 			return false
+		}
+		if strings.Contains(component, ":") {
+			if i != 0 && i != len(components)-1 {
+				return false
+			}
+			if i == 0 && len(components) == 1 && strings.Count(component, ":") > 1 {
+				return false
+			}
+			if i == len(components)-1 && strings.Count(component, ":") > 1 {
+				return false
+			}
 		}
 	}
 	for _, r := range image {
