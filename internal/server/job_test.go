@@ -609,6 +609,13 @@ func TestEnsureTenantDirectoryRejectsWritableTenantRootParent(t *testing.T) {
 	}
 }
 
+func TestEnsureTenantDirectoryRejectsRelativeTenantRoot(t *testing.T) {
+	err := ensureTenantDirectory("tenant_demo", filepath.Join(t.TempDir(), "tenant_demo", "deployments"))
+	if err == nil || !strings.Contains(err.Error(), "tenant root") || !strings.Contains(err.Error(), "absolute") {
+		t.Fatalf("expected relative tenant root refusal, got %v", err)
+	}
+}
+
 func TestFirewallCommandsDeduplicatePublishedPorts(t *testing.T) {
 	job := sampleJob()
 	job.Ports = append(job.Ports, job.Ports[0])

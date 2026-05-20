@@ -1292,6 +1292,9 @@ func ensureDeploymentDirectories(plan DeploymentPlan) error {
 func ensureTenantDirectory(tenantRoot string, directory string) error {
 	tenantRoot = filepath.Clean(tenantRoot)
 	directory = filepath.Clean(directory)
+	if !filepath.IsAbs(tenantRoot) {
+		return fmt.Errorf("deployment tenant root %q must be absolute", tenantRoot)
+	}
 	relative, err := filepath.Rel(tenantRoot, directory)
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("deployment directory %q escapes tenant root %q", directory, tenantRoot)
