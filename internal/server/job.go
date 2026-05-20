@@ -629,6 +629,18 @@ func validImageReference(image string) bool {
 	if strings.HasPrefix(image, "-") || strings.Contains(image, "://") || strings.Contains(image, "@") {
 		return false
 	}
+	if strings.HasPrefix(image, "/") || strings.HasSuffix(image, "/") || strings.HasSuffix(image, ":") || strings.Contains(image, "//") {
+		return false
+	}
+	lastSlash := strings.LastIndex(image, "/")
+	if lastColon := strings.LastIndex(image, ":"); lastColon > lastSlash && lastColon == len(image)-1 {
+		return false
+	}
+	for _, component := range strings.Split(image, "/") {
+		if component == "" || component == "." || component == ".." {
+			return false
+		}
+	}
 	for _, r := range image {
 		if r < 0x21 || r > 0x7e {
 			return false
