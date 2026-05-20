@@ -4316,6 +4316,11 @@ func TestVerifyStartedContainerWorkloadRequiresSignedCommandAndEnvironment(t *te
 			contains: "hostname override",
 		},
 		{
+			name:     "hostname-without-id",
+			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","Hostname":"custom-host","Labels":{"luma.managed":"true","luma.deployment":"dep_test","luma.tenant":"tenant_demo","luma.node":"node_local","luma.template":"tmpl_demo"},"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
+			contains: "hostname override",
+		},
+		{
 			name:     "open-stdin",
 			output:   `{"Config":{"Entrypoint":[],"Cmd":["sh","-lc","nginx -g 'daemon off;'"],"WorkingDir":"/","OpenStdin":true,"Env":["LUMA_DEPLOYMENT_ID=dep_test","LUMA_NODE_ID=node_local","LUMA_TENANT_ID=tenant_demo"]}}`,
 			contains: "interactive console settings",

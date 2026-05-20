@@ -1714,7 +1714,7 @@ func verifyStartedContainerWorkload(ctx context.Context, plan DeploymentPlan) er
 	if workload.Config.WorkingDir != defaultContainerWorkingDir {
 		return fmt.Errorf("docker container %q did not keep expected working directory", plan.ContainerName)
 	}
-	if workload.Config.Hostname != "" && workload.ID != "" && !dockerGeneratedHostname(workload.ID, workload.Config.Hostname) {
+	if workload.Config.Hostname != "" && !dockerGeneratedHostname(workload.ID, workload.Config.Hostname) {
 		return fmt.Errorf("docker container %q has unexpected hostname override", plan.ContainerName)
 	}
 	if workload.Config.OpenStdin || workload.Config.StdinOnce || workload.Config.Tty {
