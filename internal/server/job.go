@@ -599,16 +599,22 @@ func validConfinementProfile(profile string) bool {
 	if profile == "" || strings.EqualFold(profile, "unconfined") {
 		return false
 	}
-	for _, r := range profile {
+	previousSeparator := false
+	for i, r := range profile {
 		if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' {
+			previousSeparator = false
 			continue
 		}
 		if r == '.' || r == '_' || r == '-' {
+			if i == 0 || previousSeparator {
+				return false
+			}
+			previousSeparator = true
 			continue
 		}
 		return false
 	}
-	return true
+	return !previousSeparator
 }
 
 func validImageReference(image string) bool {

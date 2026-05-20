@@ -1295,6 +1295,21 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "seccomp and AppArmor",
 		},
 		{
+			name: "separator-only seccomp profile",
+			edit: func(job *DeployJob) { job.Security.SeccompProfile = "..." },
+			want: "seccomp and AppArmor",
+		},
+		{
+			name: "leading separator apparmor profile",
+			edit: func(job *DeployJob) { job.Security.AppArmorProfile = "-lumapanel-tenant" },
+			want: "seccomp and AppArmor",
+		},
+		{
+			name: "doubled separator apparmor profile",
+			edit: func(job *DeployJob) { job.Security.AppArmorProfile = "lumapanel--tenant" },
+			want: "seccomp and AppArmor",
+		},
+		{
 			name: "absolute apparmor profile path",
 			edit: func(job *DeployJob) { job.Security.AppArmorProfile = "/lumapanel-tenant" },
 			want: "seccomp and AppArmor",
