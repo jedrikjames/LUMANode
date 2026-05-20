@@ -2314,6 +2314,25 @@ func TestDockerRootDirProtectedRejectsGroupWritableDirectory(t *testing.T) {
 	}
 }
 
+func TestDockerRootDirProtectedRejectsWritableParentDirectory(t *testing.T) {
+	parentDir := filepath.Join(t.TempDir(), "writable-parent")
+	if err := os.Mkdir(parentDir, 0o777); err != nil {
+		t.Fatalf("create writable root parent: %v", err)
+	}
+	if err := os.Chmod(parentDir, 0o777); err != nil {
+		t.Fatalf("chmod writable root parent: %v", err)
+	}
+	rootDir := filepath.Join(parentDir, "docker-root")
+	if err := os.Mkdir(rootDir, 0o750); err != nil {
+		t.Fatalf("create protected docker root dir: %v", err)
+	}
+
+	protected, err := dockerRootDirProtected(rootDir)
+	if err == nil || !strings.Contains(err.Error(), "parent") || protected {
+		t.Fatalf("expected writable Docker root parent rejection, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestDockerRootDirProtectedRejectsSymlink(t *testing.T) {
 	tempDir := t.TempDir()
 	rootDir := filepath.Join(tempDir, "docker-root")

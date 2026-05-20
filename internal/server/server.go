@@ -1039,6 +1039,16 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !info.IsDir() {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
+	parentInfo, err := os.Stat(filepath.Dir(rootDir))
+	if err != nil {
+		return false, fmt.Errorf("docker root directory parent stat failed: %w", err)
+	}
+	if !parentInfo.IsDir() {
+		return false, fmt.Errorf("docker root directory parent %q is not a directory", filepath.Dir(rootDir))
+	}
+	if parentInfo.Mode().Perm()&0o022 != 0 {
+		return false, fmt.Errorf("docker root directory parent %q must not be group- or world-writable", filepath.Dir(rootDir))
+	}
 	return info.Mode().Perm()&0o022 == 0, nil
 }
 
