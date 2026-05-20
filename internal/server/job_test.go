@@ -2162,6 +2162,15 @@ exit 0
 }
 
 func TestRuntimeStatusRejectsWorldWritableDockerSocket(t *testing.T) {
+	runtimeStatusRejectsWritableDockerSocket(t, 0o666, "world-writable")
+}
+
+func TestRuntimeStatusRejectsGroupWritableDockerSocket(t *testing.T) {
+	runtimeStatusRejectsWritableDockerSocket(t, 0o660, "group-writable")
+}
+
+func runtimeStatusRejectsWritableDockerSocket(t *testing.T, mode os.FileMode, label string) {
+	t.Helper()
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
 	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
@@ -2173,7 +2182,7 @@ func TestRuntimeStatusRejectsWorldWritableDockerSocket(t *testing.T) {
 		t.Fatalf("listen on unix socket: %v", err)
 	}
 	defer listener.Close()
-	if err := os.Chmod(socketPath, 0o666); err != nil {
+	if err := os.Chmod(socketPath, mode); err != nil {
 		t.Fatalf("chmod unix socket: %v", err)
 	}
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -2272,7 +2281,7 @@ exit 0
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
 	if status.Ready || !status.DockerLocalEndpoint || status.DockerSocketProtected {
-		t.Fatalf("expected world-writable Docker socket to fail runtime readiness, got %#v", status)
+		t.Fatalf("expected %s Docker socket to fail runtime readiness, got %#v", label, status)
 	}
 	if status.Errors["dockerSocket"] == "" {
 		t.Fatalf("expected Docker socket error, got %#v", status.Errors)

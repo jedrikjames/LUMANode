@@ -918,7 +918,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			} else if protected {
 				status.DockerSocketProtected = true
 			} else {
-				status.Errors["dockerSocket"] = "docker unix socket must not be world-writable"
+				status.Errors["dockerSocket"] = "docker unix socket must not be group- or world-writable"
 			}
 		} else {
 			status.Errors["dockerEndpoint"] = "docker endpoint must be a local unix socket, not " + endpoint
@@ -1082,7 +1082,7 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if parentInfo.Mode().Perm()&0o022 != 0 {
 		return false, fmt.Errorf("docker unix socket parent %q must not be group- or world-writable", filepath.Dir(socketPath))
 	}
-	return info.Mode().Perm()&0o002 == 0, nil
+	return info.Mode().Perm()&0o022 == 0, nil
 }
 
 func dockerRootDirProtected(rootDir string) (bool, error) {
