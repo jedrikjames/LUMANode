@@ -67,6 +67,7 @@ type RuntimeStatus struct {
 	DockerLiveRestore            bool              `json:"dockerLiveRestore"`
 	DockerDefaultRuntimeRunc     bool              `json:"dockerDefaultRuntimeRunc"`
 	DockerNoWarnings             bool              `json:"dockerNoWarnings"`
+	DockerNoInsecureRegistries   bool              `json:"dockerNoInsecureRegistries"`
 	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
@@ -839,6 +840,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerWarnings"] = "docker daemon reports warnings: " + strings.TrimSpace(string(output))
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .RegistryConfig.InsecureRegistryCIDRs}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerInsecureRegistries"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerInsecureRegistries"] == "" {
+				status.Errors["dockerInsecureRegistries"] = err.Error()
+			}
+		} else if dockerInsecureRegistryCIDRsOnlyLoopback(string(output)) {
+			status.DockerNoInsecureRegistries = true
+		} else {
+			status.Errors["dockerInsecureRegistries"] = "docker daemon must not trust non-loopback insecure registry CIDRs"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DockerRootDir}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerRootDir"] = strings.TrimSpace(string(output))
@@ -941,7 +953,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -958,6 +970,46 @@ func dockerWarningsEmpty(output string) bool {
 		return false
 	}
 	return len(warnings) == 0
+}
+
+func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {
+	trimmed := strings.TrimSpace(output)
+	if trimmed == "" || trimmed == "null" {
+		return true
+	}
+	var cidrs []string
+	if err := json.Unmarshal([]byte(trimmed), &cidrs); err != nil {
+		return false
+	}
+	for _, cidr := range cidrs {
+		if !cidrIsLoopbackOnly(cidr) {
+			return false
+		}
+	}
+	return true
+}
+
+func cidrIsLoopbackOnly(value string) bool {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return false
+	}
+	ip := net.ParseIP(value)
+	if ip != nil {
+		return ip.IsLoopback()
+	}
+	networkIP, network, err := net.ParseCIDR(value)
+	if err != nil {
+		return false
+	}
+	ones, bits := network.Mask.Size()
+	if ones < 0 || bits < 0 || !networkIP.IsLoopback() {
+		return false
+	}
+	if networkIP.To4() != nil {
+		return value == "127.0.0.0/8" || ones == 32
+	}
+	return value == "::1/128" || ones == 128
 }
 
 func missingRequiredCgroupControllers(content string) []string {
