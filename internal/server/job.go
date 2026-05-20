@@ -355,6 +355,9 @@ func validateDeploymentJob(job DeployJob, nodeID string) error {
 		if strings.HasPrefix(key, "luma.") && !allowedLumaDockerLabel(key) {
 			return fmt.Errorf("deployment job has unsupported LUMA Docker label")
 		}
+		if key == "luma.template" && !validLumaIdentifier(value) {
+			return fmt.Errorf("deployment job has invalid template label")
+		}
 		if reservedLabelOverride(job, key, value) {
 			return fmt.Errorf("deployment job cannot override reserved LUMA labels")
 		}

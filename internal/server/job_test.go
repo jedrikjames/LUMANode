@@ -1383,6 +1383,14 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved LUMA labels",
 		},
 		{
+			name: "invalid template label identifier",
+			edit: func(job *DeployJob) {
+				job.Labels["luma.template"] = "tmpl__demo"
+				job.Env["LUMA_TEMPLATE_ID"] = "tmpl__demo"
+			},
+			want: "invalid template label",
+		},
+		{
 			name: "unsupported luma label",
 			edit: func(job *DeployJob) { job.Labels["luma.image_hint"] = "spoofed" },
 			want: "unsupported LUMA Docker label",
