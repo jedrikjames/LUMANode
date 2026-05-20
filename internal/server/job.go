@@ -391,6 +391,9 @@ func reservedEnvironmentOverride(job DeployJob, key string, value string) bool {
 		return value != job.TenantID
 	case "LUMA_NODE_ID":
 		return value != job.NodeID
+	case "LUMA_TEMPLATE_ID":
+		templateID, ok := job.Labels["luma.template"]
+		return !ok || value != templateID
 	default:
 		return false
 	}

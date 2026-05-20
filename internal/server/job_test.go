@@ -1278,6 +1278,19 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "reserved LUMA environment variables",
 		},
 		{
+			name: "reserved template environment override",
+			edit: func(job *DeployJob) { job.Env["LUMA_TEMPLATE_ID"] = "tmpl_other" },
+			want: "reserved LUMA environment variables",
+		},
+		{
+			name: "template environment without template label",
+			edit: func(job *DeployJob) {
+				delete(job.Labels, "luma.template")
+				job.Env["LUMA_TEMPLATE_ID"] = "tmpl_demo"
+			},
+			want: "reserved LUMA environment variables",
+		},
+		{
 			name: "unsupported LUMA environment variable",
 			edit: func(job *DeployJob) { job.Env["LUMA_IMAGE_HINT"] = "spoofed" },
 			want: "unsupported LUMA environment variable",
