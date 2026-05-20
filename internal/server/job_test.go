@@ -589,6 +589,26 @@ func TestEnsureTenantDirectoryAllowsOwnerWritableTenantPathComponent(t *testing.
 	}
 }
 
+func TestEnsureTenantDirectoryRejectsWritableTenantRootParent(t *testing.T) {
+	parentDir := filepath.Join(t.TempDir(), "tenants")
+	if err := os.Mkdir(parentDir, 0o777); err != nil {
+		t.Fatalf("create writable tenant parent: %v", err)
+	}
+	if err := os.Chmod(parentDir, 0o777); err != nil {
+		t.Fatalf("chmod writable tenant parent: %v", err)
+	}
+	tenantRoot := filepath.Join(parentDir, "tenant_demo")
+	target := filepath.Join(tenantRoot, "deployments", "dep_test")
+
+	err := ensureTenantDirectory(tenantRoot, target)
+	if err == nil || !strings.Contains(err.Error(), "deployment directory parent") {
+		t.Fatalf("expected writable tenant root parent refusal, got %v", err)
+	}
+	if _, statErr := os.Stat(tenantRoot); !os.IsNotExist(statErr) {
+		t.Fatalf("expected preflight not to create tenant root under writable parent, statErr=%v", statErr)
+	}
+}
+
 func TestFirewallCommandsDeduplicatePublishedPorts(t *testing.T) {
 	job := sampleJob()
 	job.Ports = append(job.Ports, job.Ports[0])

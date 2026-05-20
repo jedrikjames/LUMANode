@@ -1296,7 +1296,28 @@ func ensureTenantDirectory(tenantRoot string, directory string) error {
 	if err != nil || relative == ".." || strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("deployment directory %q escapes tenant root %q", directory, tenantRoot)
 	}
+	if err := ensureExistingParentProtected(tenantRoot); err != nil {
+		return err
+	}
 	return mkdirAllNoSymlinks(directory, tenantRoot)
+}
+
+func ensureExistingParentProtected(path string) error {
+	parent := nearestExistingPath(filepath.Dir(filepath.Clean(path)))
+	info, err := os.Lstat(parent)
+	if err != nil {
+		return fmt.Errorf("deployment directory parent %q stat failed: %w", parent, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("deployment directory parent %q must not be a symlink", parent)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("deployment directory parent %q is not a directory", parent)
+	}
+	if info.Mode().Perm()&0o022 != 0 {
+		return fmt.Errorf("deployment directory parent %q is group- or world-writable", parent)
+	}
+	return nil
 }
 
 func mkdirAllNoSymlinks(directory string, restrictedRoot string) error {
