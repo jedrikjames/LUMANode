@@ -1934,7 +1934,7 @@ func TestReplayCacheLoadIgnoresExpiredEntries(t *testing.T) {
 func TestRuntimeStatusRequiresDockerNftAndCgroupV2(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -2038,7 +2038,7 @@ exit 0
 func TestRuntimeStatusRejectsRemoteDockerEndpoint(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -2143,7 +2143,7 @@ exit 0
 func TestRuntimeStatusRejectsWorldWritableDockerSocket(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	socketPath := filepath.Join(tempDir, "docker.sock")
@@ -2310,7 +2310,7 @@ func TestDockerSocketProtectedRejectsWritableParentDirectory(t *testing.T) {
 func TestRuntimeStatusRejectsWorldWritableDockerRootDir(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	rootDir := filepath.Join(tempDir, "docker-root")
@@ -2567,15 +2567,15 @@ exit 0
 	if status.Ready || !status.CgroupV2 || status.CgroupControllersReady {
 		t.Fatalf("expected missing cgroup controllers to fail runtime readiness, got %#v", status)
 	}
-	if status.Errors["cgroupControllers"] == "" || !strings.Contains(status.Errors["cgroupControllers"], "pids") {
-		t.Fatalf("expected missing pids cgroup controller error, got %#v", status.Errors)
+	if status.Errors["cgroupControllers"] == "" || !strings.Contains(status.Errors["cgroupControllers"], "pids") || !strings.Contains(status.Errors["cgroupControllers"], "io") {
+		t.Fatalf("expected missing pids and io cgroup controller error, got %#v", status.Errors)
 	}
 }
 
 func TestRuntimeStatusRequiresDockerSecurityOptions(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -2701,7 +2701,7 @@ func TestDockerInsecureRegistryCIDRsOnlyLoopback(t *testing.T) {
 func TestRuntimeStatusRequiresUsableNftables(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
-	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids\n"), 0o600); err != nil {
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
 		t.Fatalf("write cgroup controllers: %v", err)
 	}
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
@@ -2813,8 +2813,8 @@ func TestMissingRequiredCgroupControllers(t *testing.T) {
 		t.Fatalf("expected all required controllers to pass, got %v", missing)
 	}
 	missing := missingRequiredCgroupControllers("memory")
-	if strings.Join(missing, ",") != "cpu,pids" {
-		t.Fatalf("expected missing cpu,pids, got %v", missing)
+	if strings.Join(missing, ",") != "cpu,pids,io" {
+		t.Fatalf("expected missing cpu,pids,io, got %v", missing)
 	}
 }
 

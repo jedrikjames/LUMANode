@@ -1017,7 +1017,7 @@ func missingRequiredCgroupControllers(content string) []string {
 	for _, controller := range strings.Fields(content) {
 		available[controller] = true
 	}
-	required := []string{"cpu", "memory", "pids"}
+	required := []string{"cpu", "memory", "pids", "io"}
 	var missing []string
 	for _, controller := range required {
 		if !available[controller] {
