@@ -39,6 +39,8 @@ type Agent struct {
 	replayCache map[string]time.Time
 }
 
+const defaultDeploymentExecutionTimeout = 30 * time.Minute
+
 type Metrics struct {
 	CPUPercent        float64 `json:"cpuPercent"`
 	MemoryPercent     float64 `json:"memoryPercent"`
@@ -495,7 +497,9 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]any{"error": "runtime_preflight_failed", "runtime": runtime})
 		return
 	}
-	if err := executeDeploymentPlan(r.Context(), plan); err != nil {
+	deploymentCtx, cancelDeployment := a.deploymentExecutionContext(r.Context())
+	defer cancelDeployment()
+	if err := executeDeploymentPlan(deploymentCtx, plan); err != nil {
 		a.logger.Error("deployment plan failed", "error", err)
 		if reportErr := a.reportDeploymentCompletion(r.Context(), job, "failed", err.Error()); reportErr != nil {
 			a.logger.Warn("failed to report deployment failure", "error", reportErr, "queue_id", job.QueueID)
@@ -507,6 +511,17 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		a.logger.Warn("failed to report deployment completion", "error", err, "queue_id", job.QueueID)
 	}
 	writeJSON(w, map[string]string{"status": "started", "container": "luma-" + job.DeploymentID})
+}
+
+func (a *Agent) deploymentExecutionContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, deploymentExecutionTimeout(a.cfg))
+}
+
+func deploymentExecutionTimeout(cfg config.Config) time.Duration {
+	if cfg.DeploymentTimeout > 0 {
+		return cfg.DeploymentTimeout
+	}
+	return defaultDeploymentExecutionTimeout
 }
 
 func (a *Agent) reportDeploymentCompletion(ctx context.Context, job DeployJob, status string, failure string) error {

@@ -16,5 +16,6 @@ type Config struct {
 	RevocationListFile           string
 	RuntimeCgroupControllersFile string
 	CertificateRotationWindow    time.Duration
+	DeploymentTimeout            time.Duration
 	RequireImageDigest           bool
 }

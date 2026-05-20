@@ -28,6 +28,7 @@ func main() {
 	flag.StringVar(&cfg.RevocationListFile, "revocation-list", os.Getenv("LUMANODE_REVOCATION_LIST"), "JSON or line-delimited revoked client certificate fingerprint list")
 	flag.StringVar(&cfg.RuntimeCgroupControllersFile, "cgroup-controllers", "/sys/fs/cgroup/cgroup.controllers", "cgroups v2 controllers file used for runtime preflight")
 	flag.DurationVar(&cfg.CertificateRotationWindow, "cert-rotation-window", 14*24*time.Hour, "rotate the node client certificate when it expires within this duration")
+	flag.DurationVar(&cfg.DeploymentTimeout, "deployment-timeout", envDuration("LUMANODE_DEPLOYMENT_TIMEOUT", 30*time.Minute), "maximum time allowed for real Docker deployment orchestration")
 	flag.BoolVar(&cfg.RequireImageDigest, "require-image-digest", os.Getenv("LUMANODE_REQUIRE_IMAGE_DIGEST") == "true", "reject real deployments unless the signed job includes a sha256 image digest")
 	flag.Parse()
 
@@ -57,4 +58,16 @@ func main() {
 		slog.Error("lumanode stopped", "error", err)
 		os.Exit(1)
 	}
+}
+
+func envDuration(name string, fallback time.Duration) time.Duration {
+	value := os.Getenv(name)
+	if value == "" {
+		return fallback
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil || duration <= 0 {
+		return fallback
+	}
+	return duration
 }

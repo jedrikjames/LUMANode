@@ -2702,6 +2702,67 @@ func TestDeployRequiresSigningSecretForRealExecution(t *testing.T) {
 	}
 }
 
+func TestDeploymentExecutionContextUsesBoundedTimeout(t *testing.T) {
+	agent := New(config.Config{NodeID: "node_local", DeploymentTimeout: 75 * time.Millisecond}, slog.Default())
+	ctx, cancel := agent.deploymentExecutionContext(context.Background())
+	defer cancel()
+
+	deadline, ok := ctx.Deadline()
+	if !ok {
+		t.Fatal("expected deployment execution context to have a deadline")
+	}
+	remaining := time.Until(deadline)
+	if remaining <= 0 || remaining > time.Second {
+		t.Fatalf("expected near-term deployment deadline, got %s", remaining)
+	}
+	if got := deploymentExecutionTimeout(config.Config{}); got != defaultDeploymentExecutionTimeout {
+		t.Fatalf("expected default deployment timeout %s, got %s", defaultDeploymentExecutionTimeout, got)
+	}
+}
+
+func TestExecuteDeploymentPlanCancelsHungDockerRunWithBoundedContext(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "network" ] && [ "$2" = "inspect" ] && [ "$3" = "-f" ]; then
+  echo "true tenant_demo false"
+  exit 0
+fi
+if [ "$1" = "network" ] && [ "$2" = "inspect" ]; then
+  exit 0
+fi
+if [ "$1" = "inspect" ]; then
+  echo "No such container" >&2
+  exit 1
+fi
+if [ "$1" = "run" ]; then
+  exec sleep 10
+fi
+exit 0
+`)
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+exit 0
+`)
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	plan.Ports = nil
+	ctx, cancel := (&Agent{cfg: config.Config{DeploymentTimeout: 50 * time.Millisecond}}).deploymentExecutionContext(context.Background())
+	defer cancel()
+	startedAt := time.Now()
+	err = executeDeploymentPlan(ctx, plan)
+	elapsed := time.Since(startedAt)
+	if err == nil || !strings.Contains(err.Error(), "docker run failed") {
+		t.Fatalf("expected docker run context failure, got %v", err)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("expected docker run to be cancelled by deployment timeout, took %s", elapsed)
+	}
+}
+
 func TestRemoveExistingContainerRequiresLumaOwnershipLabels(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
