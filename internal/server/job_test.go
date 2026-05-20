@@ -2172,6 +2172,30 @@ func TestDockerSocketProtectedRejectsRelativePath(t *testing.T) {
 	}
 }
 
+func TestDockerSocketProtectedRejectsWritableParentDirectory(t *testing.T) {
+	parentDir := filepath.Join(t.TempDir(), "writable-parent")
+	if err := os.Mkdir(parentDir, 0o777); err != nil {
+		t.Fatalf("create writable socket parent: %v", err)
+	}
+	if err := os.Chmod(parentDir, 0o777); err != nil {
+		t.Fatalf("chmod writable socket parent: %v", err)
+	}
+	socketPath := filepath.Join(parentDir, "docker.sock")
+	listener, err := net.Listen("unix", socketPath)
+	if err != nil {
+		t.Fatalf("listen on unix socket: %v", err)
+	}
+	defer listener.Close()
+	if err := os.Chmod(socketPath, 0o660); err != nil {
+		t.Fatalf("chmod protected socket: %v", err)
+	}
+
+	protected, err := dockerSocketProtected("unix://" + socketPath)
+	if err == nil || !strings.Contains(err.Error(), "parent") || protected {
+		t.Fatalf("expected writable Docker socket parent rejection, protected=%v err=%v", protected, err)
+	}
+}
+
 func TestRuntimeStatusRejectsWorldWritableDockerRootDir(t *testing.T) {
 	tempDir := t.TempDir()
 	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")

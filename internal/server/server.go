@@ -1008,6 +1008,16 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if info.Mode()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
 	}
+	parentInfo, err := os.Stat(filepath.Dir(socketPath))
+	if err != nil {
+		return false, fmt.Errorf("docker unix socket parent stat failed: %w", err)
+	}
+	if !parentInfo.IsDir() {
+		return false, fmt.Errorf("docker unix socket parent %q is not a directory", filepath.Dir(socketPath))
+	}
+	if parentInfo.Mode().Perm()&0o022 != 0 {
+		return false, fmt.Errorf("docker unix socket parent %q must not be group- or world-writable", filepath.Dir(socketPath))
+	}
 	return info.Mode().Perm()&0o002 == 0, nil
 }
 
