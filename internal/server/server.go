@@ -1072,15 +1072,19 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 	if info.Mode()&os.ModeSocket == 0 {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
 	}
-	parentInfo, err := os.Stat(filepath.Dir(socketPath))
+	parentPath := filepath.Dir(socketPath)
+	parentInfo, err := os.Lstat(parentPath)
 	if err != nil {
 		return false, fmt.Errorf("docker unix socket parent stat failed: %w", err)
 	}
+	if parentInfo.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("docker unix socket parent %q must not be a symlink", parentPath)
+	}
 	if !parentInfo.IsDir() {
-		return false, fmt.Errorf("docker unix socket parent %q is not a directory", filepath.Dir(socketPath))
+		return false, fmt.Errorf("docker unix socket parent %q is not a directory", parentPath)
 	}
 	if parentInfo.Mode().Perm()&0o022 != 0 {
-		return false, fmt.Errorf("docker unix socket parent %q must not be group- or world-writable", filepath.Dir(socketPath))
+		return false, fmt.Errorf("docker unix socket parent %q must not be group- or world-writable", parentPath)
 	}
 	return info.Mode().Perm()&0o022 == 0, nil
 }
@@ -1103,15 +1107,19 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 	if !info.IsDir() {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
-	parentInfo, err := os.Stat(filepath.Dir(rootDir))
+	parentPath := filepath.Dir(rootDir)
+	parentInfo, err := os.Lstat(parentPath)
 	if err != nil {
 		return false, fmt.Errorf("docker root directory parent stat failed: %w", err)
 	}
+	if parentInfo.Mode()&os.ModeSymlink != 0 {
+		return false, fmt.Errorf("docker root directory parent %q must not be a symlink", parentPath)
+	}
 	if !parentInfo.IsDir() {
-		return false, fmt.Errorf("docker root directory parent %q is not a directory", filepath.Dir(rootDir))
+		return false, fmt.Errorf("docker root directory parent %q is not a directory", parentPath)
 	}
 	if parentInfo.Mode().Perm()&0o022 != 0 {
-		return false, fmt.Errorf("docker root directory parent %q must not be group- or world-writable", filepath.Dir(rootDir))
+		return false, fmt.Errorf("docker root directory parent %q must not be group- or world-writable", parentPath)
 	}
 	return info.Mode().Perm()&0o022 == 0, nil
 }
