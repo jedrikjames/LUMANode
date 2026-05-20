@@ -1003,6 +1003,21 @@ func TestValidateDeploymentJobEnforcesAgentBoundary(t *testing.T) {
 			want: "invalid image reference",
 		},
 		{
+			name: "image registry with empty port",
+			edit: func(job *DeployJob) { job.Image = "registry.example.test:/nginx:latest" },
+			want: "invalid image reference",
+		},
+		{
+			name: "image registry with nonnumeric port",
+			edit: func(job *DeployJob) { job.Image = "registry.example.test:abc/nginx:latest" },
+			want: "invalid image reference",
+		},
+		{
+			name: "image registry with out of range port",
+			edit: func(job *DeployJob) { job.Image = "registry.example.test:70000/nginx:latest" },
+			want: "invalid image reference",
+		},
+		{
 			name: "invalid image digest",
 			edit: func(job *DeployJob) { job.ImageDigest = "sha256:not-a-digest" },
 			want: "invalid image digest",

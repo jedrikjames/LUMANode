@@ -645,6 +645,9 @@ func validImageReference(image string) bool {
 			if i != 0 && i != len(components)-1 {
 				return false
 			}
+			if i == 0 && len(components) > 1 && !validRegistryPortComponent(component) {
+				return false
+			}
 			if i == 0 && len(components) == 1 && strings.Count(component, ":") > 1 {
 				return false
 			}
@@ -659,6 +662,18 @@ func validImageReference(image string) bool {
 		}
 	}
 	return true
+}
+
+func validRegistryPortComponent(component string) bool {
+	if strings.Count(component, ":") != 1 {
+		return false
+	}
+	parts := strings.SplitN(component, ":", 2)
+	if parts[0] == "" || parts[1] == "" {
+		return false
+	}
+	port, err := strconv.Atoi(parts[1])
+	return err == nil && port >= 1 && port <= 65535
 }
 
 func validImageDigest(digest string) bool {
