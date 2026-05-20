@@ -1409,6 +1409,9 @@ func ensureExistingParentProtected(path string) error {
 	if !info.IsDir() {
 		return fmt.Errorf("deployment directory parent %q is not a directory", parent)
 	}
+	if err := requireRootOwnedWhenPrivileged("deployment directory parent", parent, info); err != nil {
+		return err
+	}
 	if info.Mode().Perm()&0o022 != 0 {
 		return fmt.Errorf("deployment directory parent %q is group- or world-writable", parent)
 	}
@@ -1443,8 +1446,13 @@ func mkdirAllNoSymlinks(directory string, restrictedRoot string) error {
 		if !info.IsDir() {
 			return fmt.Errorf("deployment directory %q uses non-directory path component %q", directory, current)
 		}
-		if pathWithinRoot(restrictedRoot, current) && info.Mode().Perm()&0o022 != 0 {
-			return fmt.Errorf("deployment directory %q uses group- or world-writable tenant path component %q", directory, current)
+		if pathWithinRoot(restrictedRoot, current) {
+			if err := requireRootOwnedWhenPrivileged("deployment directory tenant path component", current, info); err != nil {
+				return err
+			}
+			if info.Mode().Perm()&0o022 != 0 {
+				return fmt.Errorf("deployment directory %q uses group- or world-writable tenant path component %q", directory, current)
+			}
 		}
 	}
 	return nil

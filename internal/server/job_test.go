@@ -609,6 +609,52 @@ func TestEnsureTenantDirectoryRejectsWritableTenantRootParent(t *testing.T) {
 	}
 }
 
+func TestEnsureTenantDirectoryRejectsNonRootOwnedTenantRootParent(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	parentDir := filepath.Join(t.TempDir(), "tenants")
+	if err := os.Mkdir(parentDir, 0o755); err != nil {
+		t.Fatalf("create tenant parent: %v", err)
+	}
+	if err := os.Chown(parentDir, 65534, -1); err != nil {
+		t.Fatalf("chown tenant parent: %v", err)
+	}
+	tenantRoot := filepath.Join(parentDir, "tenant_demo")
+	target := filepath.Join(tenantRoot, "deployments", "dep_test")
+
+	err := ensureTenantDirectory(tenantRoot, target)
+	if err == nil || !strings.Contains(err.Error(), "deployment directory parent") || !strings.Contains(err.Error(), "root-owned") {
+		t.Fatalf("expected non-root-owned tenant parent refusal, got %v", err)
+	}
+	if _, statErr := os.Stat(tenantRoot); !os.IsNotExist(statErr) {
+		t.Fatalf("expected preflight not to create tenant root under non-root-owned parent, statErr=%v", statErr)
+	}
+}
+
+func TestEnsureTenantDirectoryRejectsNonRootOwnedTenantPathComponent(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("root ownership preflight applies when LUMANode runs as root")
+	}
+	tenantRoot := filepath.Join(t.TempDir(), "tenant_demo")
+	deployments := filepath.Join(tenantRoot, "deployments")
+	if err := os.MkdirAll(deployments, 0o750); err != nil {
+		t.Fatalf("create deployment directory: %v", err)
+	}
+	if err := os.Chown(deployments, 65534, -1); err != nil {
+		t.Fatalf("chown deployment directory: %v", err)
+	}
+
+	target := filepath.Join(deployments, "dep_test")
+	err := ensureTenantDirectory(tenantRoot, target)
+	if err == nil || !strings.Contains(err.Error(), "deployment directory tenant path component") || !strings.Contains(err.Error(), "root-owned") {
+		t.Fatalf("expected non-root-owned tenant path refusal, got %v", err)
+	}
+	if _, statErr := os.Stat(target); !os.IsNotExist(statErr) {
+		t.Fatalf("expected preflight not to create child inside non-root-owned directory, statErr=%v", statErr)
+	}
+}
+
 func TestEnsureTenantDirectoryRejectsRelativeTenantRoot(t *testing.T) {
 	err := ensureTenantDirectory("tenant_demo", filepath.Join(t.TempDir(), "tenant_demo", "deployments"))
 	if err == nil || !strings.Contains(err.Error(), "tenant root") || !strings.Contains(err.Error(), "absolute") {
