@@ -2337,7 +2337,7 @@ func TestDockerSocketProtectedRejectsWritableParentDirectory(t *testing.T) {
 	}
 }
 
-func TestDockerSocketProtectedRejectsSymlinkParentDirectory(t *testing.T) {
+func TestDockerSocketProtectedAllowsProtectedSymlinkParentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	realParent := filepath.Join(tempDir, "real-parent")
 	if err := os.Mkdir(realParent, 0o700); err != nil {
@@ -2358,8 +2358,8 @@ func TestDockerSocketProtectedRejectsSymlinkParentDirectory(t *testing.T) {
 	}
 
 	protected, err := dockerSocketProtected("unix://" + socketPath)
-	if err == nil || !strings.Contains(err.Error(), "parent") || !strings.Contains(err.Error(), "symlink") || protected {
-		t.Fatalf("expected symlinked Docker socket parent rejection, protected=%v err=%v", protected, err)
+	if err != nil || !protected {
+		t.Fatalf("expected protected symlinked Docker socket parent to pass, protected=%v err=%v", protected, err)
 	}
 }
 
@@ -2508,7 +2508,7 @@ func TestDockerRootDirProtectedRejectsWritableParentDirectory(t *testing.T) {
 	}
 }
 
-func TestDockerRootDirProtectedRejectsSymlinkParentDirectory(t *testing.T) {
+func TestDockerRootDirProtectedAllowsProtectedSymlinkParentDirectory(t *testing.T) {
 	tempDir := t.TempDir()
 	realParent := filepath.Join(tempDir, "real-parent")
 	if err := os.Mkdir(realParent, 0o700); err != nil {
@@ -2524,8 +2524,8 @@ func TestDockerRootDirProtectedRejectsSymlinkParentDirectory(t *testing.T) {
 	}
 
 	protected, err := dockerRootDirProtected(filepath.Join(linkParent, "docker-root"))
-	if err == nil || !strings.Contains(err.Error(), "parent") || !strings.Contains(err.Error(), "symlink") || protected {
-		t.Fatalf("expected symlinked Docker root parent rejection, protected=%v err=%v", protected, err)
+	if err != nil || !protected {
+		t.Fatalf("expected protected symlinked Docker root parent to pass, protected=%v err=%v", protected, err)
 	}
 }
 

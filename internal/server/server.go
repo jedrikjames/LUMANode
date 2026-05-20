@@ -1073,12 +1073,9 @@ func dockerSocketProtected(endpoint string) (bool, error) {
 		return false, fmt.Errorf("docker endpoint %q is not a unix socket", socketPath)
 	}
 	parentPath := filepath.Dir(socketPath)
-	parentInfo, err := os.Lstat(parentPath)
+	parentInfo, err := os.Stat(parentPath)
 	if err != nil {
 		return false, fmt.Errorf("docker unix socket parent stat failed: %w", err)
-	}
-	if parentInfo.Mode()&os.ModeSymlink != 0 {
-		return false, fmt.Errorf("docker unix socket parent %q must not be a symlink", parentPath)
 	}
 	if !parentInfo.IsDir() {
 		return false, fmt.Errorf("docker unix socket parent %q is not a directory", parentPath)
@@ -1108,12 +1105,9 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 		return false, fmt.Errorf("docker root directory %q is not a directory", rootDir)
 	}
 	parentPath := filepath.Dir(rootDir)
-	parentInfo, err := os.Lstat(parentPath)
+	parentInfo, err := os.Stat(parentPath)
 	if err != nil {
 		return false, fmt.Errorf("docker root directory parent stat failed: %w", err)
-	}
-	if parentInfo.Mode()&os.ModeSymlink != 0 {
-		return false, fmt.Errorf("docker root directory parent %q must not be a symlink", parentPath)
 	}
 	if !parentInfo.IsDir() {
 		return false, fmt.Errorf("docker root directory parent %q is not a directory", parentPath)
