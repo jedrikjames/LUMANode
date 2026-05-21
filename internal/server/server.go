@@ -64,6 +64,7 @@ type RuntimeStatus struct {
 	DockerDaemonFirewallEnabled  bool              `json:"dockerDaemonFirewallEnabled"`
 	DockerDaemonForwardDrop      bool              `json:"dockerDaemonForwardDrop"`
 	DockerDaemonSeccompConfined  bool              `json:"dockerDaemonSeccompConfined"`
+	DockerDaemonNoNewPrivileges  bool              `json:"dockerDaemonNoNewPrivileges"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -812,6 +813,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDaemonSeccomp"] = "docker daemon default seccomp profile must not be unconfined"
 		}
+		if noNewPrivileges, err := dockerDaemonDefaultNoNewPrivileges(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonNoNewPrivileges"] = err.Error()
+		} else if noNewPrivileges {
+			status.DockerDaemonNoNewPrivileges = true
+		} else {
+			status.Errors["dockerDaemonNoNewPrivileges"] = "docker daemon default no-new-privileges must be enabled"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -993,7 +1001,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1084,6 +1092,29 @@ func dockerDaemonDefaultSeccompConfined(path string) (bool, error) {
 		return false, fmt.Errorf("Docker daemon config %q must be a string", "seccomp-profile")
 	}
 	return !strings.EqualFold(strings.TrimSpace(profile), "unconfined"), nil
+}
+
+func dockerDaemonDefaultNoNewPrivileges(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	raw, ok := config["no-new-privileges"]
+	if !ok {
+		return false, nil
+	}
+	var enabled bool
+	if err := json.Unmarshal(raw, &enabled); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be boolean", "no-new-privileges")
+	}
+	return enabled, nil
 }
 
 func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {

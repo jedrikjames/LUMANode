@@ -2096,9 +2096,14 @@ exit 0
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
 	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
-	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
+	daemonConfig := filepath.Join(tempDir, "daemon.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true}`), 0o600); err != nil {
+		t.Fatalf("write daemon config: %v", err)
+	}
+
+	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2121,11 +2126,11 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerUserlandProxyDisabled {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerUserlandProxyDisabled {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
-	daemonConfig := filepath.Join(tempDir, "daemon.json")
+	daemonConfig = filepath.Join(tempDir, "daemon-firewall-disabled.json")
 	if err := os.WriteFile(daemonConfig, []byte(`{"iptables":false}`), 0o600); err != nil {
 		t.Fatalf("write daemon config: %v", err)
 	}
@@ -2153,6 +2158,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonSeccompConfined || status.Errors["dockerDaemonSeccomp"] == "" {
 		t.Fatalf("expected Docker daemon unconfined seccomp profile to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-missing-no-new-privileges.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"seccomp-profile":"/etc/docker/seccomp.json"}`), 0o600); err != nil {
+		t.Fatalf("write daemon no-new-privileges config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonNoNewPrivileges || status.Errors["dockerDaemonNoNewPrivileges"] == "" {
+		t.Fatalf("expected missing Docker daemon no-new-privileges default to fail readiness, got %#v", status)
 	}
 }
 
@@ -3070,6 +3085,38 @@ func TestDockerDaemonDefaultSeccompConfined(t *testing.T) {
 	}
 	if confined, err := dockerDaemonDefaultSeccompConfined(malformedConfig); err == nil || confined {
 		t.Fatalf("expected malformed daemon seccomp config to fail, confined=%v err=%v", confined, err)
+	}
+}
+
+func TestDockerDaemonDefaultNoNewPrivileges(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if enabled, err := dockerDaemonDefaultNoNewPrivileges(missing); err != nil || enabled {
+		t.Fatalf("expected missing daemon config to fail no-new-privileges default, enabled=%v err=%v", enabled, err)
+	}
+
+	enabledConfig := filepath.Join(tempDir, "no-new-privileges-daemon.json")
+	if err := os.WriteFile(enabledConfig, []byte(`{"no-new-privileges":true}`), 0o600); err != nil {
+		t.Fatalf("write no-new-privileges daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonDefaultNoNewPrivileges(enabledConfig); err != nil || !enabled {
+		t.Fatalf("expected daemon no-new-privileges config to pass, enabled=%v err=%v", enabled, err)
+	}
+
+	disabledConfig := filepath.Join(tempDir, "privileges-daemon.json")
+	if err := os.WriteFile(disabledConfig, []byte(`{"no-new-privileges":false}`), 0o600); err != nil {
+		t.Fatalf("write disabled no-new-privileges daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonDefaultNoNewPrivileges(disabledConfig); err != nil || enabled {
+		t.Fatalf("expected disabled daemon no-new-privileges config to fail, enabled=%v err=%v", enabled, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-no-new-privileges-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"no-new-privileges":"true"}`), 0o600); err != nil {
+		t.Fatalf("write malformed no-new-privileges daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonDefaultNoNewPrivileges(malformedConfig); err == nil || enabled {
+		t.Fatalf("expected malformed daemon no-new-privileges config to fail, enabled=%v err=%v", enabled, err)
 	}
 }
 
