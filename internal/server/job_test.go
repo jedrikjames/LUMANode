@@ -2191,7 +2191,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2214,7 +2214,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2266,6 +2266,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonICCDisabled || status.Errors["dockerDaemonIcc"] == "" {
 		t.Fatalf("expected enabled Docker daemon inter-container communication to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-tcp-host.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false,"hosts":["unix:///var/run/docker.sock","tcp://0.0.0.0:2375"]}`), 0o600); err != nil {
+		t.Fatalf("write daemon host config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonLocalHosts || status.Errors["dockerDaemonHosts"] == "" {
+		t.Fatalf("expected TCP Docker daemon host to fail readiness, got %#v", status)
 	}
 }
 
@@ -3283,6 +3293,46 @@ func TestDockerDaemonInterContainerCommunicationDisabled(t *testing.T) {
 	}
 	if disabled, err := dockerDaemonInterContainerCommunicationDisabled(malformedConfig); err == nil || disabled {
 		t.Fatalf("expected malformed daemon ICC config to fail, disabled=%v err=%v", disabled, err)
+	}
+}
+
+func TestDockerDaemonHostsLocalOnly(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if localOnly, err := dockerDaemonHostsLocalOnly(missing); err != nil || !localOnly {
+		t.Fatalf("expected missing daemon config to keep local host defaults, localOnly=%v err=%v", localOnly, err)
+	}
+
+	localConfig := filepath.Join(tempDir, "local-hosts-daemon.json")
+	if err := os.WriteFile(localConfig, []byte(`{"hosts":["unix:///var/run/docker.sock","fd://"]}`), 0o600); err != nil {
+		t.Fatalf("write local hosts daemon config: %v", err)
+	}
+	if localOnly, err := dockerDaemonHostsLocalOnly(localConfig); err != nil || !localOnly {
+		t.Fatalf("expected local daemon hosts to pass, localOnly=%v err=%v", localOnly, err)
+	}
+
+	tcpConfig := filepath.Join(tempDir, "tcp-hosts-daemon.json")
+	if err := os.WriteFile(tcpConfig, []byte(`{"hosts":["unix:///var/run/docker.sock","tcp://127.0.0.1:2375"]}`), 0o600); err != nil {
+		t.Fatalf("write TCP hosts daemon config: %v", err)
+	}
+	if localOnly, err := dockerDaemonHostsLocalOnly(tcpConfig); err != nil || localOnly {
+		t.Fatalf("expected TCP daemon host config to fail, localOnly=%v err=%v", localOnly, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-hosts-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"hosts":"unix:///var/run/docker.sock"}`), 0o600); err != nil {
+		t.Fatalf("write malformed hosts daemon config: %v", err)
+	}
+	if localOnly, err := dockerDaemonHostsLocalOnly(malformedConfig); err == nil || localOnly {
+		t.Fatalf("expected malformed daemon hosts config to fail, localOnly=%v err=%v", localOnly, err)
+	}
+
+	credentialConfig := filepath.Join(tempDir, "credential-hosts-daemon.json")
+	if err := os.WriteFile(credentialConfig, []byte(`{"hosts":["unix://user@/var/run/docker.sock"]}`), 0o600); err != nil {
+		t.Fatalf("write credential hosts daemon config: %v", err)
+	}
+	if localOnly, err := dockerDaemonHostsLocalOnly(credentialConfig); err == nil || localOnly {
+		t.Fatalf("expected credential-bearing daemon host config to fail, localOnly=%v err=%v", localOnly, err)
 	}
 }
 

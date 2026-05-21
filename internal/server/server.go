@@ -68,6 +68,7 @@ type RuntimeStatus struct {
 	DockerDaemonSeccompConfined  bool              `json:"dockerDaemonSeccompConfined"`
 	DockerDaemonNoNewPrivileges  bool              `json:"dockerDaemonNoNewPrivileges"`
 	DockerDaemonICCDisabled      bool              `json:"dockerDaemonIccDisabled"`
+	DockerDaemonLocalHosts       bool              `json:"dockerDaemonLocalHosts"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -883,6 +884,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDaemonIcc"] = "docker daemon default inter-container communication must be disabled"
 		}
+		if localHosts, err := dockerDaemonHostsLocalOnly(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonHosts"] = err.Error()
+		} else if localHosts {
+			status.DockerDaemonLocalHosts = true
+		} else {
+			status.Errors["dockerDaemonHosts"] = "docker daemon hosts must not expose TCP listeners"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -1074,7 +1082,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerDaemonLocalHosts && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1211,6 +1219,53 @@ func dockerDaemonInterContainerCommunicationDisabled(path string) (bool, error) 
 		return false, fmt.Errorf("Docker daemon config %q must be boolean", "icc")
 	}
 	return !enabled, nil
+}
+
+func dockerDaemonHostsLocalOnly(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	raw, ok := config["hosts"]
+	if !ok {
+		return true, nil
+	}
+	var hosts []string
+	if err := json.Unmarshal(raw, &hosts); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be a string array", "hosts")
+	}
+	if len(hosts) == 0 {
+		return false, fmt.Errorf("Docker daemon config %q must not be empty", "hosts")
+	}
+	for _, host := range hosts {
+		endpoint := strings.TrimSpace(host)
+		if endpoint == "" || strings.ContainsAny(endpoint, "\x00\r\n\t") {
+			return false, fmt.Errorf("Docker daemon host %q is invalid", host)
+		}
+		parsed, err := url.Parse(endpoint)
+		if err != nil || parsed.Scheme == "" {
+			return false, fmt.Errorf("Docker daemon host %q is invalid", host)
+		}
+		if parsed.User != nil || parsed.RawQuery != "" || parsed.Fragment != "" {
+			return false, fmt.Errorf("Docker daemon host %q must not include credentials, query, or fragment", host)
+		}
+		switch strings.ToLower(parsed.Scheme) {
+		case "unix", "fd":
+			continue
+		case "tcp", "http", "https":
+			return false, nil
+		default:
+			return false, fmt.Errorf("Docker daemon host %q uses unsupported scheme", host)
+		}
+	}
+	return true, nil
 }
 
 func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {
