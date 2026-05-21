@@ -2098,7 +2098,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonSeccompConfined || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2113,6 +2113,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonFirewallEnabled || status.Errors["dockerDaemonFirewall"] == "" {
 		t.Fatalf("expected Docker daemon firewall disablement to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-forward-no-drop.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"ip-forward-no-drop":true}`), 0o600); err != nil {
+		t.Fatalf("write daemon forward config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonForwardDrop || status.Errors["dockerDaemonForwardDrop"] == "" {
+		t.Fatalf("expected Docker daemon FORWARD default-drop disablement to fail readiness, got %#v", status)
 	}
 
 	daemonConfig = filepath.Join(tempDir, "daemon-unconfined-seccomp.json")
@@ -2976,6 +2986,38 @@ func TestDockerDaemonFirewallEnabled(t *testing.T) {
 	}
 	if enabled, err := dockerDaemonFirewallEnabled(malformedConfig); err == nil || enabled {
 		t.Fatalf("expected malformed daemon firewall config to fail, enabled=%v err=%v", enabled, err)
+	}
+}
+
+func TestDockerDaemonForwardDropManaged(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if managed, err := dockerDaemonForwardDropManaged(missing); err != nil || !managed {
+		t.Fatalf("expected missing daemon config to keep Docker FORWARD default-drop management, managed=%v err=%v", managed, err)
+	}
+
+	defaultConfig := filepath.Join(tempDir, "forward-default-daemon.json")
+	if err := os.WriteFile(defaultConfig, []byte(`{"ip-forward-no-drop":false}`), 0o600); err != nil {
+		t.Fatalf("write default forward daemon config: %v", err)
+	}
+	if managed, err := dockerDaemonForwardDropManaged(defaultConfig); err != nil || !managed {
+		t.Fatalf("expected Docker FORWARD default-drop management to pass, managed=%v err=%v", managed, err)
+	}
+
+	disabledConfig := filepath.Join(tempDir, "forward-no-drop-daemon.json")
+	if err := os.WriteFile(disabledConfig, []byte(`{"ip-forward-no-drop":true}`), 0o600); err != nil {
+		t.Fatalf("write no-drop forward daemon config: %v", err)
+	}
+	if managed, err := dockerDaemonForwardDropManaged(disabledConfig); err != nil || managed {
+		t.Fatalf("expected Docker FORWARD no-drop config to fail, managed=%v err=%v", managed, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-forward-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"ip-forward-no-drop":"true"}`), 0o600); err != nil {
+		t.Fatalf("write malformed forward daemon config: %v", err)
+	}
+	if managed, err := dockerDaemonForwardDropManaged(malformedConfig); err == nil || managed {
+		t.Fatalf("expected malformed Docker FORWARD config to fail, managed=%v err=%v", managed, err)
 	}
 }
 

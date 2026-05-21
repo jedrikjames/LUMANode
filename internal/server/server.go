@@ -62,6 +62,7 @@ type RuntimeStatus struct {
 	DockerBridgeNfIptables       bool              `json:"dockerBridgeNfIptables"`
 	DockerBridgeNfIp6tables      bool              `json:"dockerBridgeNfIp6tables"`
 	DockerDaemonFirewallEnabled  bool              `json:"dockerDaemonFirewallEnabled"`
+	DockerDaemonForwardDrop      bool              `json:"dockerDaemonForwardDrop"`
 	DockerDaemonSeccompConfined  bool              `json:"dockerDaemonSeccompConfined"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
@@ -797,6 +798,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDaemonFirewall"] = "docker daemon must not disable iptables or ip6tables management"
 		}
+		if managed, err := dockerDaemonForwardDropManaged(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonForwardDrop"] = err.Error()
+		} else if managed {
+			status.DockerDaemonForwardDrop = true
+		} else {
+			status.Errors["dockerDaemonForwardDrop"] = "docker daemon must not disable FORWARD-chain default-drop management"
+		}
 		if confined, err := dockerDaemonDefaultSeccompConfined(daemonConfigFile); err != nil {
 			status.Errors["dockerDaemonSeccomp"] = err.Error()
 		} else if confined {
@@ -985,7 +993,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonSeccompConfined && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1030,6 +1038,29 @@ func dockerDaemonFirewallEnabled(path string) (bool, error) {
 		}
 	}
 	return true, nil
+}
+
+func dockerDaemonForwardDropManaged(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	raw, ok := config["ip-forward-no-drop"]
+	if !ok {
+		return true, nil
+	}
+	var disabled bool
+	if err := json.Unmarshal(raw, &disabled); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be boolean", "ip-forward-no-drop")
+	}
+	return !disabled, nil
 }
 
 func dockerDaemonDefaultSeccompConfined(path string) (bool, error) {
