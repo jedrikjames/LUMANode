@@ -2097,13 +2097,13 @@ exit 0
 	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	daemonConfig := filepath.Join(tempDir, "daemon.json")
-	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true}`), 0o600); err != nil {
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false}`), 0o600); err != nil {
 		t.Fatalf("write daemon config: %v", err)
 	}
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2126,7 +2126,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerUserlandProxyDisabled {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerUserlandProxyDisabled {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2168,6 +2168,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonNoNewPrivileges || status.Errors["dockerDaemonNoNewPrivileges"] == "" {
 		t.Fatalf("expected missing Docker daemon no-new-privileges default to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-icc-enabled.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":true}`), 0o600); err != nil {
+		t.Fatalf("write daemon icc config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonICCDisabled || status.Errors["dockerDaemonIcc"] == "" {
+		t.Fatalf("expected enabled Docker daemon inter-container communication to fail readiness, got %#v", status)
 	}
 }
 
@@ -3117,6 +3127,38 @@ func TestDockerDaemonDefaultNoNewPrivileges(t *testing.T) {
 	}
 	if enabled, err := dockerDaemonDefaultNoNewPrivileges(malformedConfig); err == nil || enabled {
 		t.Fatalf("expected malformed daemon no-new-privileges config to fail, enabled=%v err=%v", enabled, err)
+	}
+}
+
+func TestDockerDaemonInterContainerCommunicationDisabled(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if disabled, err := dockerDaemonInterContainerCommunicationDisabled(missing); err != nil || disabled {
+		t.Fatalf("expected missing daemon config to fail ICC readiness, disabled=%v err=%v", disabled, err)
+	}
+
+	disabledConfig := filepath.Join(tempDir, "icc-disabled-daemon.json")
+	if err := os.WriteFile(disabledConfig, []byte(`{"icc":false}`), 0o600); err != nil {
+		t.Fatalf("write disabled ICC daemon config: %v", err)
+	}
+	if disabled, err := dockerDaemonInterContainerCommunicationDisabled(disabledConfig); err != nil || !disabled {
+		t.Fatalf("expected disabled daemon ICC config to pass, disabled=%v err=%v", disabled, err)
+	}
+
+	enabledConfig := filepath.Join(tempDir, "icc-enabled-daemon.json")
+	if err := os.WriteFile(enabledConfig, []byte(`{"icc":true}`), 0o600); err != nil {
+		t.Fatalf("write enabled ICC daemon config: %v", err)
+	}
+	if disabled, err := dockerDaemonInterContainerCommunicationDisabled(enabledConfig); err != nil || disabled {
+		t.Fatalf("expected enabled daemon ICC config to fail, disabled=%v err=%v", disabled, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-icc-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"icc":"false"}`), 0o600); err != nil {
+		t.Fatalf("write malformed ICC daemon config: %v", err)
+	}
+	if disabled, err := dockerDaemonInterContainerCommunicationDisabled(malformedConfig); err == nil || disabled {
+		t.Fatalf("expected malformed daemon ICC config to fail, disabled=%v err=%v", disabled, err)
 	}
 }
 
