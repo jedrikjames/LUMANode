@@ -482,18 +482,18 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "deployment job requires immutable image digest", http.StatusUnprocessableEntity)
 		return
 	}
-	if signedEnvelope != nil {
-		if err := a.acceptSignedDeployment(*signedEnvelope, time.Now()); err != nil {
-			http.Error(w, err.Error(), http.StatusConflict)
-			return
-		}
-	}
 	plan, err := deploymentPlan(job)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		return
 	}
 	if !realExecution {
+		if signedEnvelope != nil {
+			if err := a.acceptSignedDeployment(*signedEnvelope, time.Now()); err != nil {
+				http.Error(w, err.Error(), http.StatusConflict)
+				return
+			}
+		}
 		writeJSON(w, map[string]any{"status": "planned", "plan": plan, "dockerArgs": plan.ContainerRun.Args})
 		return
 	}
@@ -505,6 +505,12 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		a.logger.Error("runtime preflight failed", "errors", runtime.Errors)
 		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]any{"error": "runtime_preflight_failed", "runtime": runtime})
 		return
+	}
+	if signedEnvelope != nil {
+		if err := a.acceptSignedDeployment(*signedEnvelope, time.Now()); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 	}
 	deploymentCtx, cancelDeployment := a.deploymentExecutionContext(r.Context())
 	defer cancelDeployment()

@@ -3424,6 +3424,13 @@ func TestDeployFailsClosedWhenRuntimePreflightFails(t *testing.T) {
 	if !strings.Contains(response.Body.String(), "runtime_preflight_failed") {
 		t.Fatalf("expected runtime preflight error body, got %q", response.Body.String())
 	}
+
+	t.Setenv("LUMANODE_DRY_RUN", "true")
+	retry := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(retry, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(body)))
+	if retry.Code != http.StatusOK {
+		t.Fatalf("expected runtime preflight failure not to consume signed job replay cache, got %d: %s", retry.Code, retry.Body.String())
+	}
 }
 
 func TestDeployRequiresSigningSecretForRealExecution(t *testing.T) {
