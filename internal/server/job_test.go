@@ -2103,7 +2103,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2126,7 +2126,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerUserlandProxyDisabled {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2776,6 +2776,42 @@ func TestDockerRootDirProtectedRejectsSymlink(t *testing.T) {
 	protected, err := dockerRootDirProtected(linkPath)
 	if err == nil || !strings.Contains(err.Error(), "must not be a symlink") || protected {
 		t.Fatalf("expected docker root symlink rejection, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerPluginDirsProtectedRejectsWritablePluginDirectory(t *testing.T) {
+	rootDir := filepath.Join(t.TempDir(), "docker-root")
+	pluginDir := filepath.Join(rootDir, "plugins", "volume")
+	if err := os.MkdirAll(pluginDir, 0o777); err != nil {
+		t.Fatalf("create Docker plugin directory: %v", err)
+	}
+	if err := os.Chmod(pluginDir, 0o777); err != nil {
+		t.Fatalf("chmod Docker plugin directory: %v", err)
+	}
+
+	protected, err := dockerPluginDirsProtected(rootDir)
+	if err == nil || !strings.Contains(err.Error(), "group- or world-writable") || protected {
+		t.Fatalf("expected writable Docker plugin directory rejection, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerPluginDirsProtectedRejectsSymlink(t *testing.T) {
+	rootDir := filepath.Join(t.TempDir(), "docker-root")
+	realPluginDir := filepath.Join(rootDir, "real-plugin")
+	if err := os.MkdirAll(realPluginDir, 0o700); err != nil {
+		t.Fatalf("create real Docker plugin directory: %v", err)
+	}
+	pluginRoot := filepath.Join(rootDir, "plugins")
+	if err := os.Mkdir(pluginRoot, 0o700); err != nil {
+		t.Fatalf("create Docker plugin root: %v", err)
+	}
+	if err := os.Symlink(realPluginDir, filepath.Join(pluginRoot, "volume")); err != nil {
+		t.Fatalf("create Docker plugin directory symlink: %v", err)
+	}
+
+	protected, err := dockerPluginDirsProtected(rootDir)
+	if err == nil || !strings.Contains(err.Error(), "must not be a symlink") || protected {
+		t.Fatalf("expected Docker plugin directory symlink rejection, protected=%v err=%v", protected, err)
 	}
 }
 

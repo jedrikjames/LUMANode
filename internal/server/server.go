@@ -75,6 +75,7 @@ type RuntimeStatus struct {
 	DockerNoInsecureRegistries   bool              `json:"dockerNoInsecureRegistries"`
 	DockerUserlandProxyDisabled  bool              `json:"dockerUserlandProxyDisabled"`
 	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
+	DockerPluginDirsProtected    bool              `json:"dockerPluginDirsProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
 	DockerServerVersionSupported bool              `json:"dockerServerVersionSupported"`
@@ -913,12 +914,22 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			if status.Errors["dockerRootDir"] == "" {
 				status.Errors["dockerRootDir"] = err.Error()
 			}
-		} else if protected, err := dockerRootDirProtected(strings.TrimSpace(string(output))); err != nil {
-			status.Errors["dockerRootDir"] = err.Error()
-		} else if protected {
-			status.DockerRootDirProtected = true
 		} else {
-			status.Errors["dockerRootDir"] = "docker root directory must not be group- or world-writable"
+			dockerRootDir := strings.TrimSpace(string(output))
+			if protected, err := dockerRootDirProtected(dockerRootDir); err != nil {
+				status.Errors["dockerRootDir"] = err.Error()
+			} else if protected {
+				status.DockerRootDirProtected = true
+			} else {
+				status.Errors["dockerRootDir"] = "docker root directory must not be group- or world-writable"
+			}
+			if protected, err := dockerPluginDirsProtected(dockerRootDir); err != nil {
+				status.Errors["dockerPluginDirs"] = err.Error()
+			} else if protected {
+				status.DockerPluginDirsProtected = true
+			} else {
+				status.Errors["dockerPluginDirs"] = "docker plugin directories must not be group- or world-writable"
+			}
 		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.Driver}}").CombinedOutput()
 		if err != nil {
@@ -1009,7 +1020,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1304,6 +1315,48 @@ func dockerRootDirProtected(rootDir string) (bool, error) {
 		return false, fmt.Errorf("docker root directory parent %q must not be group- or world-writable", parentPath)
 	}
 	return info.Mode().Perm()&0o022 == 0, nil
+}
+
+func dockerPluginDirsProtected(rootDir string) (bool, error) {
+	rootDir = strings.TrimSpace(rootDir)
+	if rootDir == "" {
+		return false, fmt.Errorf("docker root directory is empty")
+	}
+	if !filepath.IsAbs(rootDir) {
+		return false, fmt.Errorf("docker root directory %q is not absolute", rootDir)
+	}
+	pluginRoot := filepath.Join(rootDir, "plugins")
+	if _, err := os.Lstat(pluginRoot); err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, fmt.Errorf("docker plugin directory stat failed: %w", err)
+	}
+	if err := filepath.WalkDir(pluginRoot, func(path string, entry os.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return fmt.Errorf("docker plugin directory %q stat failed: %w", path, walkErr)
+		}
+		info, err := os.Lstat(path)
+		if err != nil {
+			return fmt.Errorf("docker plugin directory %q stat failed: %w", path, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("docker plugin directory %q must not be a symlink", path)
+		}
+		if !entry.IsDir() {
+			return nil
+		}
+		if err := requireRootOwnedWhenPrivileged("docker plugin directory", path, info); err != nil {
+			return err
+		}
+		if info.Mode().Perm()&0o022 != 0 {
+			return fmt.Errorf("docker plugin directory %q must not be group- or world-writable", path)
+		}
+		return nil
+	}); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func requireRootOwnedWhenPrivileged(kind string, path string, info os.FileInfo) error {
