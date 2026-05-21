@@ -2105,6 +2105,26 @@ exit 0
 		t.Fatalf("expected Docker seccomp/AppArmor/userns readiness, got %#v", status)
 	}
 
+	response := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/health", nil))
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected health endpoint to respond 200, got %d: %s", response.Code, response.Body.String())
+	}
+	var health struct {
+		Status  string        `json:"status"`
+		NodeID  string        `json:"nodeId"`
+		Runtime RuntimeStatus `json:"runtime"`
+	}
+	if err := json.Unmarshal(response.Body.Bytes(), &health); err != nil {
+		t.Fatalf("decode health response: %v", err)
+	}
+	if health.Status != "ok" || health.NodeID != "node_local" {
+		t.Fatalf("expected ok node health response, got %#v", health)
+	}
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerUserlandProxyDisabled {
+		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
+	}
+
 	daemonConfig := filepath.Join(tempDir, "daemon.json")
 	if err := os.WriteFile(daemonConfig, []byte(`{"iptables":false}`), 0o600); err != nil {
 		t.Fatalf("write daemon config: %v", err)
