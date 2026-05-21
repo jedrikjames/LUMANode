@@ -833,12 +833,37 @@ fi
 exit 1
 `)
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	if err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:drop": {}}); err != nil {
+	if err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]nftRuleExpectation{
+		"luma:dep_test:egress:drop": {Fragments: []string{"ip saddr 172.18.0.4"}, Action: "drop"},
+	}); err != nil {
 		t.Fatalf("expected matching deployment egress rule to verify, got %v", err)
 	}
-	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:001": {}})
+	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]nftRuleExpectation{
+		"luma:dep_test:egress:001": {Fragments: []string{"ip saddr 172.18.0.4"}, Action: "accept"},
+	})
 	if err == nil || !strings.Contains(err.Error(), "unexpected deployment rule") {
 		t.Fatalf("expected unexpected egress rule verification failure, got %v", err)
+	}
+}
+
+func TestVerifyDeploymentEgressFirewallRejectsDriftedRuleBody(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+if [ "$1" = "-a" ] && [ "$6" = "forward" ]; then
+  echo 'ip saddr 172.18.0.4 ip daddr 0.0.0.0/0 tcp dport 443 counter accept comment "luma:dep_test:egress:001" # handle 20'
+  exit 0
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]nftRuleExpectation{
+		"luma:dep_test:egress:001": {
+			Fragments: []string{"ip saddr 172.18.0.4 ip daddr 203.0.113.10/32 tcp dport 443"},
+			Action:    "accept",
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "drifted deployment rule") {
+		t.Fatalf("expected drifted egress rule verification failure, got %v", err)
 	}
 }
 
@@ -853,7 +878,9 @@ fi
 exit 1
 `)
 	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]struct{}{"luma:dep_test:egress:drop": {}})
+	err := verifyDeploymentEgressFirewall(context.Background(), "dep_test", map[string]nftRuleExpectation{
+		"luma:dep_test:egress:drop": {Fragments: []string{"ip saddr 172.18.0.4"}, Action: "drop"},
+	})
 	if err == nil || !strings.Contains(err.Error(), "duplicate deployment rule") {
 		t.Fatalf("expected duplicate egress rule verification failure, got %v", err)
 	}

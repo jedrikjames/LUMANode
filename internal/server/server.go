@@ -2723,9 +2723,68 @@ func desiredFirewallComments(commands []CommandPlan) map[string]struct{} {
 	return desired
 }
 
+func desiredFirewallRuleExpectations(commands []CommandPlan) map[string]nftRuleExpectation {
+	desired := map[string]nftRuleExpectation{}
+	for _, command := range commands {
+		if command.SkipIfRuleComment == "" {
+			continue
+		}
+		expectation := nftRuleExpectationFromCommand(command)
+		if len(expectation.Fragments) == 0 && expectation.Action == "" {
+			continue
+		}
+		desired[command.SkipIfRuleComment] = expectation
+	}
+	return desired
+}
+
+func nftRuleExpectationFromCommand(command CommandPlan) nftRuleExpectation {
+	if len(command.Args) == 0 || command.Args[0] != "add" {
+		return nftRuleExpectation{}
+	}
+	ruleIndex := -1
+	for index, arg := range command.Args {
+		if arg == "rule" {
+			ruleIndex = index
+			break
+		}
+	}
+	if ruleIndex < 0 || len(command.Args) <= ruleIndex+4 {
+		return nftRuleExpectation{}
+	}
+	ruleTokens := command.Args[ruleIndex+4:]
+	counterIndex := -1
+	commentIndex := -1
+	for index, arg := range ruleTokens {
+		switch arg {
+		case "counter":
+			if counterIndex < 0 {
+				counterIndex = index
+			}
+		case "comment":
+			if commentIndex < 0 {
+				commentIndex = index
+			}
+		}
+	}
+	expectation := nftRuleExpectation{}
+	if counterIndex > 0 {
+		expectation.Fragments = append(expectation.Fragments, strings.Join(ruleTokens[:counterIndex], " "))
+	}
+	if counterIndex >= 0 && commentIndex > counterIndex+1 {
+		expectation.Action = ruleTokens[counterIndex+1]
+	}
+	return expectation
+}
+
 type nftManagedRule struct {
 	Comment string
 	Handle  string
+}
+
+type nftRuleExpectation struct {
+	Fragments []string
+	Action    string
 }
 
 func staleDeploymentFirewallRules(nftOutput string, deploymentID string, desired map[string]struct{}) []nftManagedRule {
@@ -2866,7 +2925,7 @@ func enforceContainerEgress(ctx context.Context, plan DeploymentPlan) error {
 		}
 	}
 	if plan.Egress.Mode == "" || plan.Egress.Mode == "allow-all" {
-		return verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, map[string]struct{}{})
+		return verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, map[string]nftRuleExpectation{})
 	}
 	inspect := exec.CommandContext(
 		ctx,
@@ -2905,13 +2964,13 @@ func enforceContainerEgress(ctx context.Context, plan DeploymentPlan) error {
 			return err
 		}
 	}
-	if err := verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, desiredFirewallComments(commands[bootstrapCount:])); err != nil {
+	if err := verifyDeploymentEgressFirewall(ctx, plan.DeploymentID, desiredFirewallRuleExpectations(commands[bootstrapCount:])); err != nil {
 		return err
 	}
 	return nil
 }
 
-func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, desired map[string]struct{}) error {
+func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, desired map[string]nftRuleExpectation) error {
 	if deploymentID == "" {
 		return nil
 	}
@@ -2936,6 +2995,9 @@ func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, de
 		if _, duplicate := seen[rule.Comment]; duplicate {
 			return fmt.Errorf("nft egress verification found duplicate deployment rule %q", rule.Comment)
 		}
+		if !nftRuleLineMatchesExpectation(line, desired[rule.Comment]) {
+			return fmt.Errorf("nft egress verification found drifted deployment rule %q", rule.Comment)
+		}
 		seen[rule.Comment] = struct{}{}
 	}
 	for comment := range desired {
@@ -2944,6 +3006,24 @@ func verifyDeploymentEgressFirewall(ctx context.Context, deploymentID string, de
 		}
 	}
 	return nil
+}
+
+func nftRuleLineMatchesExpectation(line string, expectation nftRuleExpectation) bool {
+	normalizedLine := strings.Join(strings.Fields(line), " ")
+	for _, fragment := range expectation.Fragments {
+		if fragment != "" && !strings.Contains(normalizedLine, fragment) {
+			return false
+		}
+	}
+	if expectation.Action == "" {
+		return true
+	}
+	for _, field := range strings.Fields(normalizedLine) {
+		if field == expectation.Action {
+			return true
+		}
+	}
+	return false
 }
 
 func removeExistingContainer(ctx context.Context, plan DeploymentPlan) error {
