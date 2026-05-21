@@ -1607,6 +1607,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
 		return fmt.Errorf("docker container %q has unsafe runtime state after start", plan.ContainerName)
 	}
+	if state.ExitCode != 0 || state.Error != "" {
+		return fmt.Errorf("docker container %q has unsafe runtime status after start", plan.ContainerName)
+	}
 	if state.RestartCount != 0 {
 		return fmt.Errorf("docker container %q restarted unexpectedly after start", plan.ContainerName)
 	}
@@ -1649,6 +1652,8 @@ type startedContainerState struct {
 	TenantID     string
 	NodeID       string
 	RestartCount int
+	ExitCode     int
+	Error        string
 }
 
 func inspectStartedContainerState(ctx context.Context, containerName string) (startedContainerState, error) {
@@ -1657,7 +1662,7 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 		"docker",
 		"inspect",
 		"-f",
-		`{{ .State.Running }} {{ .State.Paused }} {{ .State.Restarting }} {{ .State.Dead }} {{ .State.OOMKilled }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }} {{ .RestartCount }}`,
+		`{{ .State.Running }} {{ .State.Paused }} {{ .State.Restarting }} {{ .State.Dead }} {{ .State.OOMKilled }} {{ if .State.Health }}{{ .State.Health.Status }}{{ else }}none{{ end }} {{ index .Config.Labels "luma.managed" }} {{ index .Config.Labels "luma.deployment" }} {{ index .Config.Labels "luma.tenant" }} {{ index .Config.Labels "luma.node" }} {{ .RestartCount }} {{ .State.ExitCode }} {{ if .State.Error }}error{{ else }}none{{ end }}`,
 		containerName,
 	).CombinedOutput()
 	if err != nil {
@@ -1695,6 +1700,17 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 	if err != nil || restartCount < 0 {
 		return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned invalid restart count %q", containerName, fields[10])
 	}
+	exitCode := 0
+	if len(fields) > 11 {
+		exitCode, err = strconv.Atoi(fields[11])
+		if err != nil {
+			return startedContainerState{}, fmt.Errorf("docker container %q state inspect returned invalid exit code %q", containerName, fields[11])
+		}
+	}
+	stateError := ""
+	if len(fields) > 12 && fields[12] != "none" {
+		stateError = fields[12]
+	}
 	return startedContainerState{
 		Running:      running,
 		Paused:       paused,
@@ -1707,6 +1723,8 @@ func inspectStartedContainerState(ctx context.Context, containerName string) (st
 		TenantID:     fields[8],
 		NodeID:       fields[9],
 		RestartCount: restartCount,
+		ExitCode:     exitCode,
+		Error:        stateError,
 	}, nil
 }
 
@@ -1734,6 +1752,9 @@ func waitForStartedContainerHealthy(ctx context.Context, plan DeploymentPlan) er
 		}
 		if state.Paused || state.Restarting || state.Dead || state.OOMKilled {
 			return fmt.Errorf("docker container %q has unsafe runtime state before becoming healthy", plan.ContainerName)
+		}
+		if state.ExitCode != 0 || state.Error != "" {
+			return fmt.Errorf("docker container %q has unsafe runtime status before becoming healthy", plan.ContainerName)
 		}
 		if state.RestartCount != 0 {
 			return fmt.Errorf("docker container %q restarted unexpectedly before becoming healthy", plan.ContainerName)

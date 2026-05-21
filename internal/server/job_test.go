@@ -4366,6 +4366,39 @@ exit 1
 	}
 }
 
+func TestStartedContainerStateRejectsUnsafeRuntimeStatus(t *testing.T) {
+	cases := []struct {
+		name   string
+		output string
+	}{
+		{name: "exit-code", output: "true false false false false healthy true dep_test tenant_demo node_local 0 137 none"},
+		{name: "state-error", output: "true false false false false healthy true dep_test tenant_demo node_local 0 0 error"},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo %q
+  exit 0
+fi
+exit 1
+`, tt.output))
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			plan, err := deploymentPlan(sampleJob())
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			if err := verifyStartedContainer(context.Background(), plan); err == nil || !strings.Contains(err.Error(), "unsafe runtime status") {
+				t.Fatalf("expected unsafe runtime status verification failure, got %v", err)
+			}
+			if err := waitForStartedContainerHealthy(context.Background(), plan); err == nil || !strings.Contains(err.Error(), "unsafe runtime status") {
+				t.Fatalf("expected unsafe runtime status health wait failure, got %v", err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 	cases := []struct {
 		name     string
