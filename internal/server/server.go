@@ -41,6 +41,7 @@ type Agent struct {
 }
 
 const defaultDeploymentExecutionTimeout = 30 * time.Minute
+const defaultRuntimePreflightTimeout = 10 * time.Second
 
 type Metrics struct {
 	CPUPercent        float64 `json:"cpuPercent"`
@@ -505,7 +506,9 @@ func (a *Agent) deploy(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "deployment job signing secret required for real execution", http.StatusUnauthorized)
 		return
 	}
-	if runtime := a.runtimeStatus(r.Context()); !runtime.Ready {
+	preflightCtx, cancelPreflight := a.runtimePreflightContext(r.Context())
+	defer cancelPreflight()
+	if runtime := a.runtimeStatus(preflightCtx); !runtime.Ready {
 		a.logger.Error("runtime preflight failed", "errors", runtime.Errors)
 		writeJSONStatus(w, http.StatusServiceUnavailable, map[string]any{"error": "runtime_preflight_failed", "runtime": runtime})
 		return
@@ -536,11 +539,22 @@ func (a *Agent) deploymentExecutionContext(parent context.Context) (context.Cont
 	return context.WithTimeout(parent, deploymentExecutionTimeout(a.cfg))
 }
 
+func (a *Agent) runtimePreflightContext(parent context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(parent, runtimePreflightTimeout(a.cfg))
+}
+
 func deploymentExecutionTimeout(cfg config.Config) time.Duration {
 	if cfg.DeploymentTimeout > 0 {
 		return cfg.DeploymentTimeout
 	}
 	return defaultDeploymentExecutionTimeout
+}
+
+func runtimePreflightTimeout(cfg config.Config) time.Duration {
+	if cfg.RuntimePreflightTimeout > 0 {
+		return cfg.RuntimePreflightTimeout
+	}
+	return defaultRuntimePreflightTimeout
 }
 
 func (a *Agent) reportDeploymentCompletion(ctx context.Context, job DeployJob, status string, failure string) error {

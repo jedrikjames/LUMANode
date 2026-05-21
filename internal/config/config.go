@@ -18,5 +18,6 @@ type Config struct {
 	RuntimeDockerDaemonConfigFile string
 	CertificateRotationWindow     time.Duration
 	DeploymentTimeout             time.Duration
+	RuntimePreflightTimeout       time.Duration
 	RequireImageDigest            bool
 }

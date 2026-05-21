@@ -30,6 +30,7 @@ func main() {
 	flag.StringVar(&cfg.RuntimeDockerDaemonConfigFile, "docker-daemon-config", "/etc/docker/daemon.json", "Docker daemon JSON config used for runtime preflight")
 	flag.DurationVar(&cfg.CertificateRotationWindow, "cert-rotation-window", 14*24*time.Hour, "rotate the node client certificate when it expires within this duration")
 	flag.DurationVar(&cfg.DeploymentTimeout, "deployment-timeout", envDuration("LUMANODE_DEPLOYMENT_TIMEOUT", 30*time.Minute), "maximum time allowed for real Docker deployment orchestration")
+	flag.DurationVar(&cfg.RuntimePreflightTimeout, "runtime-preflight-timeout", envDuration("LUMANODE_RUNTIME_PREFLIGHT_TIMEOUT", 10*time.Second), "maximum time allowed for Docker/nftables runtime readiness checks before real deployment")
 	flag.BoolVar(&cfg.RequireImageDigest, "require-image-digest", os.Getenv("LUMANODE_REQUIRE_IMAGE_DIGEST") == "true", "reject real deployments unless the signed job includes a sha256 image digest")
 	flag.Parse()
 

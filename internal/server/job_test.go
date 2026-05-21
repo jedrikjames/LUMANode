@@ -3531,6 +3531,57 @@ func TestDeploymentExecutionContextUsesBoundedTimeout(t *testing.T) {
 	}
 }
 
+func TestDeployRuntimePreflightUsesBoundedContext(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+exec sleep 10
+`)
+	writeFakeCommand(t, tempDir, "nft", `#!/bin/sh
+exec sleep 10
+`)
+	cgroupFile := filepath.Join(tempDir, "cgroup.controllers")
+	if err := os.WriteFile(cgroupFile, []byte("cpu memory pids io\n"), 0o600); err != nil {
+		t.Fatalf("write cgroup controllers: %v", err)
+	}
+	previousPath := os.Getenv("PATH")
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+previousPath)
+	t.Setenv("LUMANODE_DRY_RUN", "false")
+	secret := "test-signing-secret"
+	envelope := signSampleJob(t, sampleJob(), secret, time.Now().Add(10*time.Minute))
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		t.Fatalf("marshal signed envelope: %v", err)
+	}
+	agent := New(config.Config{
+		NodeID:                       "node_local",
+		JobSigningSecret:             secret,
+		RuntimeCgroupControllersFile: cgroupFile,
+		RuntimePreflightTimeout:      50 * time.Millisecond,
+	}, slog.Default())
+
+	startedAt := time.Now()
+	response := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(body)))
+	elapsed := time.Since(startedAt)
+
+	if response.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected bounded runtime preflight failure, got %d: %s", response.Code, response.Body.String())
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("expected runtime preflight to be cancelled quickly, took %s", elapsed)
+	}
+	if !strings.Contains(response.Body.String(), "runtime_preflight_failed") {
+		t.Fatalf("expected runtime preflight error body, got %q", response.Body.String())
+	}
+
+	t.Setenv("LUMANODE_DRY_RUN", "true")
+	retry := httptest.NewRecorder()
+	agent.server.Handler.ServeHTTP(retry, httptest.NewRequest(http.MethodPost, "/deploy", bytes.NewReader(body)))
+	if retry.Code != http.StatusOK {
+		t.Fatalf("expected timed-out runtime preflight not to consume signed job replay cache, got %d: %s", retry.Code, retry.Body.String())
+	}
+}
+
 func TestExecuteDeploymentPlanCancelsHungDockerRunWithBoundedContext(t *testing.T) {
 	tempDir := t.TempDir()
 	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
