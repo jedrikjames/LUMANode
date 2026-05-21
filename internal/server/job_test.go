@@ -4399,6 +4399,33 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerRejectsUnsignedHealthStatus(t *testing.T) {
+	cases := []string{"healthy", "unhealthy", "starting"}
+	for _, health := range cases {
+		t.Run(health, func(t *testing.T) {
+			tempDir := t.TempDir()
+			writeFakeCommand(t, tempDir, "docker", fmt.Sprintf(`#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  echo "true false false false false %s true dep_test tenant_demo node_local 0 0 none"
+  exit 0
+fi
+exit 1
+`, health))
+			t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+			job := sampleJob()
+			job.Healthcheck = ""
+			plan, err := deploymentPlan(job)
+			if err != nil {
+				t.Fatalf("deploymentPlan returned error: %v", err)
+			}
+			err = verifyStartedContainer(context.Background(), plan)
+			if err == nil || !strings.Contains(err.Error(), "unexpected health status without signed healthcheck") {
+				t.Fatalf("expected unsigned health status verification failure, got %v", err)
+			}
+		})
+	}
+}
+
 func TestVerifyStartedContainerHealthcheckRequiresExpectedConfig(t *testing.T) {
 	cases := []struct {
 		name     string

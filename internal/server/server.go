@@ -1616,6 +1616,9 @@ func verifyStartedContainer(ctx context.Context, plan DeploymentPlan) error {
 	if !state.Managed || state.DeploymentID != plan.DeploymentID || state.TenantID != plan.TenantID || state.NodeID != plan.NodeID {
 		return fmt.Errorf("docker container %q ownership labels do not match deployment plan", plan.ContainerName)
 	}
+	if plan.Healthcheck == "" && state.Health != "none" {
+		return fmt.Errorf("docker container %q has unexpected health status without signed healthcheck", plan.ContainerName)
+	}
 	if err := verifyStartedContainerIsolation(ctx, plan); err != nil {
 		return err
 	}
