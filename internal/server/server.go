@@ -61,6 +61,7 @@ type RuntimeStatus struct {
 	DockerIPv4Forwarding         bool              `json:"dockerIPv4Forwarding"`
 	DockerBridgeNfIptables       bool              `json:"dockerBridgeNfIptables"`
 	DockerBridgeNfIp6tables      bool              `json:"dockerBridgeNfIp6tables"`
+	DockerDaemonFirewallEnabled  bool              `json:"dockerDaemonFirewallEnabled"`
 	DockerSeccomp                bool              `json:"dockerSeccomp"`
 	DockerAppArmor               bool              `json:"dockerAppArmor"`
 	DockerUserNamespace          bool              `json:"dockerUserNamespace"`
@@ -784,6 +785,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerBridgeNfIp6tables"] = "docker bridge netfilter ip6tables hook must be enabled"
 		}
+		daemonConfigFile := a.cfg.RuntimeDockerDaemonConfigFile
+		if daemonConfigFile == "" {
+			daemonConfigFile = "/etc/docker/daemon.json"
+		}
+		if enabled, err := dockerDaemonFirewallEnabled(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonFirewall"] = err.Error()
+		} else if enabled {
+			status.DockerDaemonFirewallEnabled = true
+		} else {
+			status.Errors["dockerDaemonFirewall"] = "docker daemon must not disable iptables or ip6tables management"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -965,7 +977,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -982,6 +994,34 @@ func dockerWarningsEmpty(output string) bool {
 		return false
 	}
 	return len(warnings) == 0
+}
+
+func dockerDaemonFirewallEnabled(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	for _, key := range []string{"iptables", "ip6tables"} {
+		raw, ok := config[key]
+		if !ok {
+			continue
+		}
+		var enabled bool
+		if err := json.Unmarshal(raw, &enabled); err != nil {
+			return false, fmt.Errorf("Docker daemon config %q must be boolean", key)
+		}
+		if !enabled {
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {

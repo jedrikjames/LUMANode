@@ -2098,11 +2098,21 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
 		t.Fatalf("expected Docker seccomp/AppArmor/userns readiness, got %#v", status)
+	}
+
+	daemonConfig := filepath.Join(tempDir, "daemon.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"iptables":false}`), 0o600); err != nil {
+		t.Fatalf("write daemon config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonFirewallEnabled || status.Errors["dockerDaemonFirewall"] == "" {
+		t.Fatalf("expected Docker daemon firewall disablement to fail readiness, got %#v", status)
 	}
 }
 
@@ -2924,6 +2934,38 @@ func TestDockerWarningsEmpty(t *testing.T) {
 	}
 	if dockerWarningsEmpty("not-json") {
 		t.Fatal("expected malformed Docker warnings output to fail readiness")
+	}
+}
+
+func TestDockerDaemonFirewallEnabled(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if enabled, err := dockerDaemonFirewallEnabled(missing); err != nil || !enabled {
+		t.Fatalf("expected missing daemon config to keep Docker firewall defaults, enabled=%v err=%v", enabled, err)
+	}
+
+	enabledConfig := filepath.Join(tempDir, "enabled-daemon.json")
+	if err := os.WriteFile(enabledConfig, []byte(`{"iptables":true,"ip6tables":true}`), 0o600); err != nil {
+		t.Fatalf("write enabled daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonFirewallEnabled(enabledConfig); err != nil || !enabled {
+		t.Fatalf("expected enabled daemon firewall config, enabled=%v err=%v", enabled, err)
+	}
+
+	disabledConfig := filepath.Join(tempDir, "disabled-daemon.json")
+	if err := os.WriteFile(disabledConfig, []byte(`{"iptables":false}`), 0o600); err != nil {
+		t.Fatalf("write disabled daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonFirewallEnabled(disabledConfig); err != nil || enabled {
+		t.Fatalf("expected disabled daemon firewall config to fail, enabled=%v err=%v", enabled, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"iptables":"false"}`), 0o600); err != nil {
+		t.Fatalf("write malformed daemon config: %v", err)
+	}
+	if enabled, err := dockerDaemonFirewallEnabled(malformedConfig); err == nil || enabled {
+		t.Fatalf("expected malformed daemon firewall config to fail, enabled=%v err=%v", enabled, err)
 	}
 }
 

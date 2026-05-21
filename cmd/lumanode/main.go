@@ -27,6 +27,7 @@ func main() {
 	flag.StringVar(&cfg.ReplayStoreFile, "replay-store", "/var/lib/lumanode/replayed-jobs.json", "durable accepted job signature replay cache")
 	flag.StringVar(&cfg.RevocationListFile, "revocation-list", os.Getenv("LUMANODE_REVOCATION_LIST"), "JSON or line-delimited revoked client certificate fingerprint list")
 	flag.StringVar(&cfg.RuntimeCgroupControllersFile, "cgroup-controllers", "/sys/fs/cgroup/cgroup.controllers", "cgroups v2 controllers file used for runtime preflight")
+	flag.StringVar(&cfg.RuntimeDockerDaemonConfigFile, "docker-daemon-config", "/etc/docker/daemon.json", "Docker daemon JSON config used for runtime preflight")
 	flag.DurationVar(&cfg.CertificateRotationWindow, "cert-rotation-window", 14*24*time.Hour, "rotate the node client certificate when it expires within this duration")
 	flag.DurationVar(&cfg.DeploymentTimeout, "deployment-timeout", envDuration("LUMANODE_DEPLOYMENT_TIMEOUT", 30*time.Minute), "maximum time allowed for real Docker deployment orchestration")
 	flag.BoolVar(&cfg.RequireImageDigest, "require-image-digest", os.Getenv("LUMANODE_REQUIRE_IMAGE_DIGEST") == "true", "reject real deployments unless the signed job includes a sha256 image digest")
