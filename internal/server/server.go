@@ -2463,9 +2463,6 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if fields[4] != expectedDiskLimit {
 		return fmt.Errorf("docker container %q did not keep expected writable layer size", plan.ContainerName)
 	}
-	if len(fields) == 27 && fields[25] == "4" && fields[26] != "1" {
-		return fmt.Errorf("docker container %q has unexpected storage options", plan.ContainerName)
-	}
 	shmBytes, shmErr := strconv.ParseInt(fields[5], 10, 64)
 	if shmErr != nil || shmBytes != defaultContainerShmBytes {
 		return fmt.Errorf("docker container %q did not keep expected shared memory size", plan.ContainerName)
@@ -2492,6 +2489,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	}
 	if fields[23] != "0" || fields[24] != "0" {
 		return fmt.Errorf("docker container %q has unexpected realtime CPU scheduler overrides", plan.ContainerName)
+	}
+	if len(fields) == 27 {
+		if fields[25] != "4" {
+			return fmt.Errorf("docker container %q has unexpected log driver options", plan.ContainerName)
+		}
+		if fields[26] != "1" {
+			return fmt.Errorf("docker container %q has unexpected storage options", plan.ContainerName)
+		}
 	}
 	return nil
 }
