@@ -2494,9 +2494,6 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if fields[6] != "json-file" || fields[7] != defaultContainerLogMaxSize || fields[8] != defaultContainerLogMaxFile || fields[9] != defaultContainerLogMode || fields[10] != defaultContainerLogMaxBufferSize {
 		return fmt.Errorf("docker container %q did not keep expected log rotation settings", plan.ContainerName)
 	}
-	if len(fields) == 26 && fields[25] != "4" {
-		return fmt.Errorf("docker container %q has unexpected log driver options", plan.ContainerName)
-	}
 	if fields[11] != "0" {
 		return fmt.Errorf("docker container %q has unexpected memory reservation", plan.ContainerName)
 	}
@@ -2514,13 +2511,14 @@ func verifyStartedContainerResources(ctx context.Context, plan DeploymentPlan) e
 	if fields[23] != "0" || fields[24] != "0" {
 		return fmt.Errorf("docker container %q has unexpected realtime CPU scheduler overrides", plan.ContainerName)
 	}
-	if len(fields) == 27 {
-		if fields[25] != "4" {
-			return fmt.Errorf("docker container %q has unexpected log driver options", plan.ContainerName)
-		}
-		if fields[26] != "1" {
-			return fmt.Errorf("docker container %q has unexpected storage options", plan.ContainerName)
-		}
+	if len(fields) != 27 {
+		return fmt.Errorf("docker container %q resource inspect returned unexpected field count", plan.ContainerName)
+	}
+	if fields[25] != "4" {
+		return fmt.Errorf("docker container %q has unexpected log driver options", plan.ContainerName)
+	}
+	if fields[26] != "1" {
+		return fmt.Errorf("docker container %q has unexpected storage options", plan.ContainerName)
 	}
 	return nil
 }
