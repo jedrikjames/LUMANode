@@ -1845,6 +1845,45 @@ func TestReportDeploymentCompletionSignsQueueCallback(t *testing.T) {
 	}
 }
 
+func TestReportDeploymentCompletionSanitizesFailurePayload(t *testing.T) {
+	secret := "agent-completion-secret"
+	panel := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var request deploymentCompletionRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode completion request: %v", err)
+		}
+		if request.Status != "failed" {
+			t.Fatalf("unexpected completion status %q", request.Status)
+		}
+		if strings.ContainsAny(request.Error, "\r\n\t") || strings.ContainsRune(request.Error, rune(0x7f)) {
+			t.Fatalf("expected sanitized failure text, got %q", request.Error)
+		}
+		if len([]rune(request.Error)) > 2048 {
+			t.Fatalf("expected bounded failure text, got %d runes", len([]rune(request.Error)))
+		}
+		payload := deploymentCompletionPayload("queue_dep_test", request.NodeID, request.Status, request.Error, request.Nonce, request.ExpiresAt)
+		mac := hmac.New(sha256.New, []byte(secret))
+		mac.Write([]byte(payload))
+		if request.Signature != base64.RawURLEncoding.EncodeToString(mac.Sum(nil)) {
+			t.Fatalf("unexpected completion signature")
+		}
+		writeJSON(w, map[string]string{"status": "ok"})
+	}))
+	defer panel.Close()
+
+	agent := New(config.Config{
+		NodeID:           "node_local",
+		PanelURL:         panel.URL,
+		JobSigningSecret: secret,
+	}, slog.Default())
+	job := sampleJob()
+	job.QueueID = "queue_dep_test"
+	failure := "docker failed\nnonce:forged\tpayload" + strings.Repeat("x", 2100) + string(rune(0x7f))
+	if err := agent.reportDeploymentCompletion(context.Background(), job, "failed", failure); err != nil {
+		t.Fatalf("reportDeploymentCompletion returned error: %v", err)
+	}
+}
+
 func testCertificate(t *testing.T) *x509.Certificate {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)

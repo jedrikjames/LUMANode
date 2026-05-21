@@ -551,9 +551,7 @@ func (a *Agent) reportDeploymentCompletion(ctx context.Context, job DeployJob, s
 		return err
 	}
 	expiresAt := time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339)
-	if len(failure) > 2048 {
-		failure = failure[:2048]
-	}
+	failure = sanitizeDeploymentFailure(failure)
 	payload := deploymentCompletionPayload(job.QueueID, a.cfg.NodeID, status, failure, nonce, expiresAt)
 	mac := hmac.New(sha256.New, []byte(a.cfg.JobSigningSecret))
 	mac.Write([]byte(payload))
@@ -590,6 +588,20 @@ func (a *Agent) reportDeploymentCompletion(ctx context.Context, job DeployJob, s
 
 func deploymentCompletionPayload(queueID, nodeID, status, failure, nonce, expiresAt string) string {
 	return fmt.Sprintf("queueId:%s\nnodeId:%s\nstatus:%s\nerror:%s\nnonce:%s\nexpiresAt:%s", queueID, nodeID, status, failure, nonce, expiresAt)
+}
+
+func sanitizeDeploymentFailure(failure string) string {
+	failure = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f {
+			return ' '
+		}
+		return r
+	}, failure)
+	runes := []rune(failure)
+	if len(runes) > 2048 {
+		return string(runes[:2048])
+	}
+	return failure
 }
 
 func (a *Agent) acceptSignedDeployment(envelope signedDeployJob, now time.Time) error {
