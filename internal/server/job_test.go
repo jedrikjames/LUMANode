@@ -138,7 +138,7 @@ func TestDockerRunArgsIncludesIsolationControls(t *testing.T) {
 		"--tmpfs",
 		"/tmp:rw,noexec,nosuid,nodev,size=64m",
 		"--tmpfs",
-		"/run:rw,nosuid,nodev,size=16m",
+		"/run:rw,noexec,nosuid,nodev,size=16m",
 		"luma.managed=true",
 		"luma.deployment=dep_test",
 		"luma.tenant=tenant_demo",
@@ -3523,7 +3523,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -3630,7 +3630,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -3735,7 +3735,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -3875,7 +3875,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -3987,7 +3987,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -4093,7 +4093,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -4188,7 +4188,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -4850,7 +4850,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5625,7 +5625,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5711,7 +5711,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5788,7 +5788,7 @@ func TestVerifyStartedContainerMountsRequiresTmpfsScratchPaths(t *testing.T) {
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5884,7 +5884,7 @@ func TestVerifyStartedContainerMountsRejectsUnexpectedMounts(t *testing.T) {
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5914,7 +5914,7 @@ func TestVerifyStartedContainerMountsRequiresTmpfsConfig(t *testing.T) {
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -5936,6 +5936,34 @@ exit 1
 	}
 }
 
+func TestVerifyStartedContainerMountsRequiresRunTmpfsNoexec(t *testing.T) {
+	tempDir := t.TempDir()
+	writeFakeCommand(t, tempDir, "docker", `#!/bin/sh
+if [ "$1" = "inspect" ]; then
+  case "$3" in
+    *json\ .HostConfig.Tmpfs*)
+      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      exit 0
+      ;;
+    *json\ .Mounts*)
+      echo '[{"Type":"bind","Source":"/srv/lumapanel/tenants/tenant_demo/deployments/dep_test","Destination":"/data","RW":true,"Propagation":"rprivate"},{"Type":"tmpfs","Source":"","Destination":"/tmp","RW":true,"Propagation":""},{"Type":"tmpfs","Source":"","Destination":"/run","RW":true,"Propagation":""}]'
+      exit 0
+      ;;
+  esac
+fi
+exit 1
+`)
+	t.Setenv("PATH", tempDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	plan, err := deploymentPlan(sampleJob())
+	if err != nil {
+		t.Fatalf("deploymentPlan returned error: %v", err)
+	}
+	err = verifyStartedContainerMounts(context.Background(), plan)
+	if err == nil || !strings.Contains(err.Error(), `tmpfs config for "/run"`) {
+		t.Fatalf("expected /run tmpfs noexec drift failure, got %v", err)
+	}
+}
+
 func TestExecuteDeploymentPlanRemovesStartedContainerWithSecurityProfileDrift(t *testing.T) {
 	tempDir := t.TempDir()
 	logFile := filepath.Join(tempDir, "docker.log")
@@ -5951,7 +5979,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -6037,7 +6065,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)
@@ -6129,7 +6157,7 @@ fi
 if [ "$1" = "inspect" ]; then
   case "$3" in
     *json\ .HostConfig.Tmpfs*)
-      echo '{"/run":"rw,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
+      echo '{"/run":"rw,noexec,nosuid,nodev,size=16m","/tmp":"rw,noexec,nosuid,nodev,size=64m"}'
       exit 0
       ;;
     *json\ .Mounts*)

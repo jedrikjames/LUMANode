@@ -28,6 +28,7 @@ const defaultContainerHealthInterval = "30s"
 const defaultContainerHealthTimeout = "5s"
 const defaultContainerHealthRetries = 3
 const defaultContainerTmpfsSize = "64m"
+const defaultContainerRunTmpfsSize = "16m"
 const defaultContainerShmSize = "64m"
 const defaultContainerShmBytes = 64 * 1024 * 1024
 const defaultContainerMemorySwappiness = 0
@@ -787,7 +788,7 @@ func dockerRunArgs(job DeployJob) ([]string, error) {
 	if job.Security.ReadOnlyRootFS {
 		args = append(args, "--read-only")
 		args = append(args, "--tmpfs", "/tmp:rw,noexec,nosuid,nodev,size="+defaultContainerTmpfsSize)
-		args = append(args, "--tmpfs", "/run:rw,nosuid,nodev,size=16m")
+		args = append(args, "--tmpfs", "/run:rw,noexec,nosuid,nodev,size="+defaultContainerRunTmpfsSize)
 	}
 	for _, capability := range job.Security.DroppedCapabilities {
 		args = append(args, "--cap-drop", capability)

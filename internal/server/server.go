@@ -2440,7 +2440,7 @@ func verifyStartedContainerTmpfsConfig(ctx context.Context, plan DeploymentPlan)
 	}
 	expected := map[string]string{
 		"/tmp": "rw,noexec,nosuid,nodev,size=" + defaultContainerTmpfsSize,
-		"/run": "rw,nosuid,nodev,size=16m",
+		"/run": "rw,noexec,nosuid,nodev,size=" + defaultContainerRunTmpfsSize,
 	}
 	if len(tmpfs) != len(expected) {
 		return fmt.Errorf("docker container %q did not keep expected tmpfs config", plan.ContainerName)
