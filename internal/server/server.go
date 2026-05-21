@@ -68,6 +68,7 @@ type RuntimeStatus struct {
 	DockerDefaultRuntimeRunc     bool              `json:"dockerDefaultRuntimeRunc"`
 	DockerNoWarnings             bool              `json:"dockerNoWarnings"`
 	DockerNoInsecureRegistries   bool              `json:"dockerNoInsecureRegistries"`
+	DockerUserlandProxyDisabled  bool              `json:"dockerUserlandProxyDisabled"`
 	DockerRootDirProtected       bool              `json:"dockerRootDirProtected"`
 	DockerStorageOverlay2        bool              `json:"dockerStorageOverlay2"`
 	DockerStorageDType           bool              `json:"dockerStorageDType"`
@@ -851,6 +852,17 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerInsecureRegistries"] = "docker daemon must not trust non-loopback insecure registry CIDRs"
 		}
+		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.UserlandProxy}}").CombinedOutput()
+		if err != nil {
+			status.Errors["dockerUserlandProxy"] = strings.TrimSpace(string(output))
+			if status.Errors["dockerUserlandProxy"] == "" {
+				status.Errors["dockerUserlandProxy"] = err.Error()
+			}
+		} else if strings.EqualFold(strings.TrimSpace(string(output)), "false") {
+			status.DockerUserlandProxyDisabled = true
+		} else {
+			status.Errors["dockerUserlandProxy"] = "docker userland proxy must be disabled"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{.DockerRootDir}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerRootDir"] = strings.TrimSpace(string(output))
@@ -953,7 +965,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
