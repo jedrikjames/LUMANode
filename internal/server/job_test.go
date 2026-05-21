@@ -2098,7 +2098,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonSeccompConfined || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2113,6 +2113,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonFirewallEnabled || status.Errors["dockerDaemonFirewall"] == "" {
 		t.Fatalf("expected Docker daemon firewall disablement to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-unconfined-seccomp.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"seccomp-profile":"unconfined"}`), 0o600); err != nil {
+		t.Fatalf("write daemon seccomp config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonSeccompConfined || status.Errors["dockerDaemonSeccomp"] == "" {
+		t.Fatalf("expected Docker daemon unconfined seccomp profile to fail readiness, got %#v", status)
 	}
 }
 
@@ -2966,6 +2976,38 @@ func TestDockerDaemonFirewallEnabled(t *testing.T) {
 	}
 	if enabled, err := dockerDaemonFirewallEnabled(malformedConfig); err == nil || enabled {
 		t.Fatalf("expected malformed daemon firewall config to fail, enabled=%v err=%v", enabled, err)
+	}
+}
+
+func TestDockerDaemonDefaultSeccompConfined(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if confined, err := dockerDaemonDefaultSeccompConfined(missing); err != nil || !confined {
+		t.Fatalf("expected missing daemon config to keep Docker default seccomp confinement, confined=%v err=%v", confined, err)
+	}
+
+	defaultConfig := filepath.Join(tempDir, "default-seccomp-daemon.json")
+	if err := os.WriteFile(defaultConfig, []byte(`{"seccomp-profile":"/etc/docker/seccomp.json"}`), 0o600); err != nil {
+		t.Fatalf("write default seccomp daemon config: %v", err)
+	}
+	if confined, err := dockerDaemonDefaultSeccompConfined(defaultConfig); err != nil || !confined {
+		t.Fatalf("expected custom daemon seccomp profile to pass, confined=%v err=%v", confined, err)
+	}
+
+	unconfinedConfig := filepath.Join(tempDir, "unconfined-daemon.json")
+	if err := os.WriteFile(unconfinedConfig, []byte(`{"seccomp-profile":"unconfined"}`), 0o600); err != nil {
+		t.Fatalf("write unconfined seccomp daemon config: %v", err)
+	}
+	if confined, err := dockerDaemonDefaultSeccompConfined(unconfinedConfig); err != nil || confined {
+		t.Fatalf("expected unconfined daemon seccomp profile to fail, confined=%v err=%v", confined, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-seccomp-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"seccomp-profile":false}`), 0o600); err != nil {
+		t.Fatalf("write malformed seccomp daemon config: %v", err)
+	}
+	if confined, err := dockerDaemonDefaultSeccompConfined(malformedConfig); err == nil || confined {
+		t.Fatalf("expected malformed daemon seccomp config to fail, confined=%v err=%v", confined, err)
 	}
 }
 
