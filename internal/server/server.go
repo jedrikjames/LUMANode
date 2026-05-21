@@ -16,6 +16,7 @@ import (
 	"math"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -349,7 +350,10 @@ func (a *Agent) requestCertificateRotation(ctx context.Context, now time.Time) (
 	if err != nil {
 		return certificateRotationCredentials{}, err
 	}
-	endpoint := strings.TrimRight(a.cfg.PanelURL, "/") + "/api/nodes/" + a.cfg.NodeID + "/certificate/rotate-agent"
+	endpoint, err := panelAPIEndpoint(a.cfg.PanelURL, "/api/nodes/"+a.cfg.NodeID+"/certificate/rotate-agent")
+	if err != nil {
+		return certificateRotationCredentials{}, err
+	}
 	request, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, strings.NewReader(string(requestBody)))
 	if err != nil {
 		return certificateRotationCredentials{}, err
@@ -568,7 +572,10 @@ func (a *Agent) reportDeploymentCompletion(ctx context.Context, job DeployJob, s
 	}
 	reportCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	endpoint := strings.TrimRight(a.cfg.PanelURL, "/") + "/api/jobs/" + job.QueueID + "/complete-agent"
+	endpoint, err := panelAPIEndpoint(a.cfg.PanelURL, "/api/jobs/"+job.QueueID+"/complete-agent")
+	if err != nil {
+		return err
+	}
 	request, err := http.NewRequestWithContext(reportCtx, http.MethodPost, endpoint, strings.NewReader(string(requestBody)))
 	if err != nil {
 		return err
@@ -602,6 +609,21 @@ func sanitizeDeploymentFailure(failure string) string {
 		return string(runes[:2048])
 	}
 	return failure
+}
+
+func panelAPIEndpoint(panelURL string, apiPath string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(panelURL))
+	if err != nil {
+		return "", fmt.Errorf("invalid panel URL: %w", err)
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return "", fmt.Errorf("invalid panel URL: scheme must be http or https")
+	}
+	if parsed.Host == "" || parsed.User != nil || parsed.Path != "" || parsed.RawQuery != "" || parsed.Fragment != "" {
+		return "", fmt.Errorf("invalid panel URL: configure an http(s) origin without credentials, path, query, or fragment")
+	}
+	parsed.Path = apiPath
+	return parsed.String(), nil
 }
 
 func (a *Agent) acceptSignedDeployment(envelope signedDeployJob, now time.Time) error {

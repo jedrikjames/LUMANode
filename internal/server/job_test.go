@@ -1884,6 +1884,28 @@ func TestReportDeploymentCompletionSanitizesFailurePayload(t *testing.T) {
 	}
 }
 
+func TestPanelAPIEndpointRequiresOrigin(t *testing.T) {
+	endpoint, err := panelAPIEndpoint("https://panel.example.test:8443", "/api/jobs/queue_dep_test/complete-agent")
+	if err != nil {
+		t.Fatalf("expected panel origin to pass: %v", err)
+	}
+	if endpoint != "https://panel.example.test:8443/api/jobs/queue_dep_test/complete-agent" {
+		t.Fatalf("unexpected endpoint %q", endpoint)
+	}
+
+	for _, panelURL := range []string{
+		"ftp://panel.example.test",
+		"https://user:pass@panel.example.test",
+		"https://panel.example.test/base",
+		"https://panel.example.test?token=secret",
+		"https://panel.example.test#fragment",
+	} {
+		if _, err := panelAPIEndpoint(panelURL, "/api/jobs/queue_dep_test/complete-agent"); err == nil {
+			t.Fatalf("expected invalid panel URL %q to fail", panelURL)
+		}
+	}
+}
+
 func testCertificate(t *testing.T) *x509.Certificate {
 	t.Helper()
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
