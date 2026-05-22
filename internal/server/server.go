@@ -72,6 +72,7 @@ type RuntimeStatus struct {
 	DockerDaemonLocalHosts             bool              `json:"dockerDaemonLocalHosts"`
 	DockerDaemonExecRootProtected      bool              `json:"dockerDaemonExecRootProtected"`
 	DockerDaemonShutdownTimeoutBounded bool              `json:"dockerDaemonShutdownTimeoutBounded"`
+	DockerDaemonLogDefaultsBounded     bool              `json:"dockerDaemonLogDefaultsBounded"`
 	DockerSeccomp                      bool              `json:"dockerSeccomp"`
 	DockerAppArmor                     bool              `json:"dockerAppArmor"`
 	DockerUserNamespace                bool              `json:"dockerUserNamespace"`
@@ -908,6 +909,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDaemonShutdownTimeout"] = fmt.Sprintf("docker daemon shutdown-timeout must be between 1 and %d seconds", maxDockerDaemonShutdownTimeoutSeconds)
 		}
+		if bounded, err := dockerDaemonLogDefaultsBounded(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonLogDefaults"] = err.Error()
+		} else if bounded {
+			status.DockerDaemonLogDefaultsBounded = true
+		} else {
+			status.Errors["dockerDaemonLogDefaults"] = "docker daemon default json-file logs must set bounded max-size and max-file rotation"
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -1099,7 +1107,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerDaemonLocalHosts && status.DockerDaemonExecRootProtected && status.DockerDaemonShutdownTimeoutBounded && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerDaemonLocalHosts && status.DockerDaemonExecRootProtected && status.DockerDaemonShutdownTimeoutBounded && status.DockerDaemonLogDefaultsBounded && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1337,6 +1345,40 @@ func dockerDaemonShutdownTimeoutBounded(path string) (bool, error) {
 		return false, fmt.Errorf("Docker daemon config %q must be an integer number", "shutdown-timeout")
 	}
 	return seconds >= 1 && seconds <= maxDockerDaemonShutdownTimeoutSeconds, nil
+}
+
+func dockerDaemonLogDefaultsBounded(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	rawDriver, ok := config["log-driver"]
+	if !ok {
+		return false, nil
+	}
+	var driver string
+	if err := json.Unmarshal(rawDriver, &driver); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be a string", "log-driver")
+	}
+	if !strings.EqualFold(strings.TrimSpace(driver), "json-file") {
+		return false, nil
+	}
+	rawOpts, ok := config["log-opts"]
+	if !ok {
+		return false, nil
+	}
+	var opts map[string]string
+	if err := json.Unmarshal(rawOpts, &opts); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be a string map", "log-opts")
+	}
+	return opts["max-size"] == defaultContainerLogMaxSize && opts["max-file"] == defaultContainerLogMaxFile, nil
 }
 
 func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {

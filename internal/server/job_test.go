@@ -2185,13 +2185,13 @@ exit 0
 	t.Setenv("DOCKER_ROOT_DIR", tempDir)
 
 	daemonConfig := filepath.Join(tempDir, "daemon.json")
-	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false}`), 0o600); err != nil {
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false,"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}`), 0o600); err != nil {
 		t.Fatalf("write daemon config: %v", err)
 	}
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerDaemonExecRootProtected || !status.DockerDaemonShutdownTimeoutBounded || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerDaemonExecRootProtected || !status.DockerDaemonShutdownTimeoutBounded || !status.DockerDaemonLogDefaultsBounded || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2214,7 +2214,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerDaemonExecRootProtected || !health.Runtime.DockerDaemonShutdownTimeoutBounded || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerDaemonExecRootProtected || !health.Runtime.DockerDaemonShutdownTimeoutBounded || !health.Runtime.DockerDaemonLogDefaultsBounded || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2303,6 +2303,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonShutdownTimeoutBounded || status.Errors["dockerDaemonShutdownTimeout"] == "" {
 		t.Fatalf("expected unbounded Docker daemon shutdown-timeout to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-unbounded-log-defaults.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false,"log-driver":"json-file","log-opts":{"max-size":"100m","max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write daemon log config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonLogDefaultsBounded || status.Errors["dockerDaemonLogDefaults"] == "" {
+		t.Fatalf("expected unbounded Docker daemon log defaults to fail readiness, got %#v", status)
 	}
 }
 
@@ -3487,6 +3497,70 @@ func TestDockerDaemonShutdownTimeoutBounded(t *testing.T) {
 	}
 	if bounded, err := dockerDaemonShutdownTimeoutBounded(fractionConfig); err == nil || bounded {
 		t.Fatalf("expected fractional shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
+	}
+}
+
+func TestDockerDaemonLogDefaultsBounded(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if bounded, err := dockerDaemonLogDefaultsBounded(missing); err != nil || bounded {
+		t.Fatalf("expected missing daemon config to fail log default readiness, bounded=%v err=%v", bounded, err)
+	}
+
+	boundedConfig := filepath.Join(tempDir, "bounded-log-daemon.json")
+	if err := os.WriteFile(boundedConfig, []byte(`{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write bounded log daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(boundedConfig); err != nil || !bounded {
+		t.Fatalf("expected bounded log defaults to pass, bounded=%v err=%v", bounded, err)
+	}
+
+	missingOptsConfig := filepath.Join(tempDir, "missing-log-opts-daemon.json")
+	if err := os.WriteFile(missingOptsConfig, []byte(`{"log-driver":"json-file"}`), 0o600); err != nil {
+		t.Fatalf("write missing log opts daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(missingOptsConfig); err != nil || bounded {
+		t.Fatalf("expected missing log opts to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	unboundedSizeConfig := filepath.Join(tempDir, "unbounded-log-size-daemon.json")
+	if err := os.WriteFile(unboundedSizeConfig, []byte(`{"log-driver":"json-file","log-opts":{"max-size":"100m","max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write unbounded log size daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(unboundedSizeConfig); err != nil || bounded {
+		t.Fatalf("expected unbounded log size to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	unboundedFileConfig := filepath.Join(tempDir, "unbounded-log-file-daemon.json")
+	if err := os.WriteFile(unboundedFileConfig, []byte(`{"log-driver":"json-file","log-opts":{"max-size":"10m","max-file":"10"}}`), 0o600); err != nil {
+		t.Fatalf("write unbounded log file daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(unboundedFileConfig); err != nil || bounded {
+		t.Fatalf("expected unbounded log file count to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	wrongDriverConfig := filepath.Join(tempDir, "wrong-log-driver-daemon.json")
+	if err := os.WriteFile(wrongDriverConfig, []byte(`{"log-driver":"syslog","log-opts":{"max-size":"10m","max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write wrong log driver daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(wrongDriverConfig); err != nil || bounded {
+		t.Fatalf("expected unsupported log driver to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	malformedDriverConfig := filepath.Join(tempDir, "malformed-log-driver-daemon.json")
+	if err := os.WriteFile(malformedDriverConfig, []byte(`{"log-driver":false,"log-opts":{"max-size":"10m","max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write malformed log driver daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(malformedDriverConfig); err == nil || bounded {
+		t.Fatalf("expected malformed log driver to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	malformedOptsConfig := filepath.Join(tempDir, "malformed-log-opts-daemon.json")
+	if err := os.WriteFile(malformedOptsConfig, []byte(`{"log-driver":"json-file","log-opts":{"max-size":10,"max-file":"3"}}`), 0o600); err != nil {
+		t.Fatalf("write malformed log opts daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonLogDefaultsBounded(malformedOptsConfig); err == nil || bounded {
+		t.Fatalf("expected malformed log opts to fail, bounded=%v err=%v", bounded, err)
 	}
 }
 
