@@ -2191,7 +2191,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerDaemonExecRootProtected || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2214,7 +2214,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerDaemonExecRootProtected || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2276,6 +2276,23 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonLocalHosts || status.Errors["dockerDaemonHosts"] == "" {
 		t.Fatalf("expected TCP Docker daemon host to fail readiness, got %#v", status)
+	}
+
+	execRoot := filepath.Join(tempDir, "docker-exec-root")
+	if err := os.Mkdir(execRoot, 0o777); err != nil {
+		t.Fatalf("create docker exec-root: %v", err)
+	}
+	if err := os.Chmod(execRoot, 0o777); err != nil {
+		t.Fatalf("chmod docker exec-root: %v", err)
+	}
+	daemonConfig = filepath.Join(tempDir, "daemon-writable-exec-root.json")
+	if err := os.WriteFile(daemonConfig, []byte(fmt.Sprintf(`{"no-new-privileges":true,"icc":false,"exec-root":%q}`, execRoot)), 0o600); err != nil {
+		t.Fatalf("write daemon exec-root config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonExecRootProtected || status.Errors["dockerDaemonExecRoot"] == "" {
+		t.Fatalf("expected writable Docker daemon exec-root to fail readiness, got %#v", status)
 	}
 }
 
@@ -3333,6 +3350,69 @@ func TestDockerDaemonHostsLocalOnly(t *testing.T) {
 	}
 	if localOnly, err := dockerDaemonHostsLocalOnly(credentialConfig); err == nil || localOnly {
 		t.Fatalf("expected credential-bearing daemon host config to fail, localOnly=%v err=%v", localOnly, err)
+	}
+}
+
+func TestDockerDaemonExecRootProtected(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if protected, err := dockerDaemonExecRootProtected(missing); err != nil || !protected {
+		t.Fatalf("expected missing daemon config to keep Docker exec-root defaults, protected=%v err=%v", protected, err)
+	}
+
+	defaultConfig := filepath.Join(tempDir, "default-exec-root-daemon.json")
+	if err := os.WriteFile(defaultConfig, []byte(`{"no-new-privileges":true}`), 0o600); err != nil {
+		t.Fatalf("write default exec-root daemon config: %v", err)
+	}
+	if protected, err := dockerDaemonExecRootProtected(defaultConfig); err != nil || !protected {
+		t.Fatalf("expected absent exec-root config to pass, protected=%v err=%v", protected, err)
+	}
+
+	execRoot := filepath.Join(tempDir, "exec-root")
+	if err := os.Mkdir(execRoot, 0o700); err != nil {
+		t.Fatalf("create exec-root: %v", err)
+	}
+	protectedConfig := filepath.Join(tempDir, "protected-exec-root-daemon.json")
+	if err := os.WriteFile(protectedConfig, []byte(fmt.Sprintf(`{"exec-root":%q}`, execRoot)), 0o600); err != nil {
+		t.Fatalf("write protected exec-root daemon config: %v", err)
+	}
+	if protected, err := dockerDaemonExecRootProtected(protectedConfig); err != nil || !protected {
+		t.Fatalf("expected protected exec-root config to pass, protected=%v err=%v", protected, err)
+	}
+
+	writableRoot := filepath.Join(tempDir, "writable-exec-root")
+	if err := os.Mkdir(writableRoot, 0o777); err != nil {
+		t.Fatalf("create writable exec-root: %v", err)
+	}
+	if err := os.Chmod(writableRoot, 0o777); err != nil {
+		t.Fatalf("chmod writable exec-root: %v", err)
+	}
+	writableConfig := filepath.Join(tempDir, "writable-exec-root-daemon.json")
+	if err := os.WriteFile(writableConfig, []byte(fmt.Sprintf(`{"exec-root":%q}`, writableRoot)), 0o600); err != nil {
+		t.Fatalf("write writable exec-root daemon config: %v", err)
+	}
+	if protected, err := dockerDaemonExecRootProtected(writableConfig); err != nil || protected {
+		t.Fatalf("expected writable exec-root config to fail, protected=%v err=%v", protected, err)
+	}
+
+	linkPath := filepath.Join(tempDir, "exec-root-link")
+	if err := os.Symlink(execRoot, linkPath); err != nil {
+		t.Fatalf("create exec-root symlink: %v", err)
+	}
+	symlinkConfig := filepath.Join(tempDir, "symlink-exec-root-daemon.json")
+	if err := os.WriteFile(symlinkConfig, []byte(fmt.Sprintf(`{"exec-root":%q}`, linkPath)), 0o600); err != nil {
+		t.Fatalf("write symlink exec-root daemon config: %v", err)
+	}
+	if protected, err := dockerDaemonExecRootProtected(symlinkConfig); err == nil || !strings.Contains(err.Error(), "must not be a symlink") || protected {
+		t.Fatalf("expected symlink exec-root config to fail, protected=%v err=%v", protected, err)
+	}
+
+	malformedConfig := filepath.Join(tempDir, "malformed-exec-root-daemon.json")
+	if err := os.WriteFile(malformedConfig, []byte(`{"exec-root":false}`), 0o600); err != nil {
+		t.Fatalf("write malformed exec-root daemon config: %v", err)
+	}
+	if protected, err := dockerDaemonExecRootProtected(malformedConfig); err == nil || protected {
+		t.Fatalf("expected malformed exec-root config to fail, protected=%v err=%v", protected, err)
 	}
 }
 
