@@ -42,6 +42,7 @@ type Agent struct {
 
 const defaultDeploymentExecutionTimeout = 30 * time.Minute
 const defaultRuntimePreflightTimeout = 10 * time.Second
+const maxDockerDaemonShutdownTimeoutSeconds = 120
 
 type Metrics struct {
 	CPUPercent        float64 `json:"cpuPercent"`
@@ -51,46 +52,47 @@ type Metrics struct {
 }
 
 type RuntimeStatus struct {
-	Ready                         bool              `json:"ready"`
-	Docker                        bool              `json:"docker"`
-	DockerCgroupV2                bool              `json:"dockerCgroupV2"`
-	DockerCgroupDriverSystemd     bool              `json:"dockerCgroupDriverSystemd"`
-	DockerCgroupNamespacePrivate  bool              `json:"dockerCgroupNamespacePrivate"`
-	DockerDebugDisabled           bool              `json:"dockerDebugDisabled"`
-	DockerExperimentalDisabled    bool              `json:"dockerExperimentalDisabled"`
-	DockerSwarmInactive           bool              `json:"dockerSwarmInactive"`
-	DockerOomKillEnabled          bool              `json:"dockerOomKillEnabled"`
-	DockerIPv4Forwarding          bool              `json:"dockerIPv4Forwarding"`
-	DockerBridgeNfIptables        bool              `json:"dockerBridgeNfIptables"`
-	DockerBridgeNfIp6tables       bool              `json:"dockerBridgeNfIp6tables"`
-	DockerDaemonFirewallEnabled   bool              `json:"dockerDaemonFirewallEnabled"`
-	DockerDaemonForwardDrop       bool              `json:"dockerDaemonForwardDrop"`
-	DockerDaemonSeccompConfined   bool              `json:"dockerDaemonSeccompConfined"`
-	DockerDaemonNoNewPrivileges   bool              `json:"dockerDaemonNoNewPrivileges"`
-	DockerDaemonICCDisabled       bool              `json:"dockerDaemonIccDisabled"`
-	DockerDaemonLocalHosts        bool              `json:"dockerDaemonLocalHosts"`
-	DockerDaemonExecRootProtected bool              `json:"dockerDaemonExecRootProtected"`
-	DockerSeccomp                 bool              `json:"dockerSeccomp"`
-	DockerAppArmor                bool              `json:"dockerAppArmor"`
-	DockerUserNamespace           bool              `json:"dockerUserNamespace"`
-	DockerLiveRestore             bool              `json:"dockerLiveRestore"`
-	DockerDefaultRuntimeRunc      bool              `json:"dockerDefaultRuntimeRunc"`
-	DockerNoWarnings              bool              `json:"dockerNoWarnings"`
-	DockerNoInsecureRegistries    bool              `json:"dockerNoInsecureRegistries"`
-	DockerUserlandProxyDisabled   bool              `json:"dockerUserlandProxyDisabled"`
-	DockerRootDirProtected        bool              `json:"dockerRootDirProtected"`
-	DockerPluginDirsProtected     bool              `json:"dockerPluginDirsProtected"`
-	DockerStorageOverlay2         bool              `json:"dockerStorageOverlay2"`
-	DockerStorageDType            bool              `json:"dockerStorageDType"`
-	DockerServerVersionSupported  bool              `json:"dockerServerVersionSupported"`
-	DockerOSTypeLinux             bool              `json:"dockerOSTypeLinux"`
-	DockerLocalEndpoint           bool              `json:"dockerLocalEndpoint"`
-	DockerSocketProtected         bool              `json:"dockerSocketProtected"`
-	Nftables                      bool              `json:"nftables"`
-	NftablesUsable                bool              `json:"nftablesUsable"`
-	CgroupV2                      bool              `json:"cgroupV2"`
-	CgroupControllersReady        bool              `json:"cgroupControllersReady"`
-	Errors                        map[string]string `json:"errors,omitempty"`
+	Ready                              bool              `json:"ready"`
+	Docker                             bool              `json:"docker"`
+	DockerCgroupV2                     bool              `json:"dockerCgroupV2"`
+	DockerCgroupDriverSystemd          bool              `json:"dockerCgroupDriverSystemd"`
+	DockerCgroupNamespacePrivate       bool              `json:"dockerCgroupNamespacePrivate"`
+	DockerDebugDisabled                bool              `json:"dockerDebugDisabled"`
+	DockerExperimentalDisabled         bool              `json:"dockerExperimentalDisabled"`
+	DockerSwarmInactive                bool              `json:"dockerSwarmInactive"`
+	DockerOomKillEnabled               bool              `json:"dockerOomKillEnabled"`
+	DockerIPv4Forwarding               bool              `json:"dockerIPv4Forwarding"`
+	DockerBridgeNfIptables             bool              `json:"dockerBridgeNfIptables"`
+	DockerBridgeNfIp6tables            bool              `json:"dockerBridgeNfIp6tables"`
+	DockerDaemonFirewallEnabled        bool              `json:"dockerDaemonFirewallEnabled"`
+	DockerDaemonForwardDrop            bool              `json:"dockerDaemonForwardDrop"`
+	DockerDaemonSeccompConfined        bool              `json:"dockerDaemonSeccompConfined"`
+	DockerDaemonNoNewPrivileges        bool              `json:"dockerDaemonNoNewPrivileges"`
+	DockerDaemonICCDisabled            bool              `json:"dockerDaemonIccDisabled"`
+	DockerDaemonLocalHosts             bool              `json:"dockerDaemonLocalHosts"`
+	DockerDaemonExecRootProtected      bool              `json:"dockerDaemonExecRootProtected"`
+	DockerDaemonShutdownTimeoutBounded bool              `json:"dockerDaemonShutdownTimeoutBounded"`
+	DockerSeccomp                      bool              `json:"dockerSeccomp"`
+	DockerAppArmor                     bool              `json:"dockerAppArmor"`
+	DockerUserNamespace                bool              `json:"dockerUserNamespace"`
+	DockerLiveRestore                  bool              `json:"dockerLiveRestore"`
+	DockerDefaultRuntimeRunc           bool              `json:"dockerDefaultRuntimeRunc"`
+	DockerNoWarnings                   bool              `json:"dockerNoWarnings"`
+	DockerNoInsecureRegistries         bool              `json:"dockerNoInsecureRegistries"`
+	DockerUserlandProxyDisabled        bool              `json:"dockerUserlandProxyDisabled"`
+	DockerRootDirProtected             bool              `json:"dockerRootDirProtected"`
+	DockerPluginDirsProtected          bool              `json:"dockerPluginDirsProtected"`
+	DockerStorageOverlay2              bool              `json:"dockerStorageOverlay2"`
+	DockerStorageDType                 bool              `json:"dockerStorageDType"`
+	DockerServerVersionSupported       bool              `json:"dockerServerVersionSupported"`
+	DockerOSTypeLinux                  bool              `json:"dockerOSTypeLinux"`
+	DockerLocalEndpoint                bool              `json:"dockerLocalEndpoint"`
+	DockerSocketProtected              bool              `json:"dockerSocketProtected"`
+	Nftables                           bool              `json:"nftables"`
+	NftablesUsable                     bool              `json:"nftablesUsable"`
+	CgroupV2                           bool              `json:"cgroupV2"`
+	CgroupControllersReady             bool              `json:"cgroupControllersReady"`
+	Errors                             map[string]string `json:"errors,omitempty"`
 }
 
 var containerHealthWait = 2 * time.Minute
@@ -899,6 +901,13 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 		} else {
 			status.Errors["dockerDaemonExecRoot"] = "configured docker daemon exec-root must not be group- or world-writable"
 		}
+		if bounded, err := dockerDaemonShutdownTimeoutBounded(daemonConfigFile); err != nil {
+			status.Errors["dockerDaemonShutdownTimeout"] = err.Error()
+		} else if bounded {
+			status.DockerDaemonShutdownTimeoutBounded = true
+		} else {
+			status.Errors["dockerDaemonShutdownTimeout"] = fmt.Sprintf("docker daemon shutdown-timeout must be between 1 and %d seconds", maxDockerDaemonShutdownTimeoutSeconds)
+		}
 		output, err = exec.CommandContext(ctx, "docker", "info", "--format", "{{json .SecurityOptions}}").CombinedOutput()
 		if err != nil {
 			status.Errors["dockerSecurityOptions"] = strings.TrimSpace(string(output))
@@ -1090,7 +1099,7 @@ func (a *Agent) runtimeStatus(ctx context.Context) RuntimeStatus {
 			status.Errors["cgroupControllers"] = "missing required cgroup v2 controllers: " + strings.Join(missing, ", ")
 		}
 	}
-	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerDaemonLocalHosts && status.DockerDaemonExecRootProtected && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
+	status.Ready = status.Docker && status.DockerCgroupV2 && status.DockerCgroupDriverSystemd && status.DockerCgroupNamespacePrivate && status.DockerDebugDisabled && status.DockerExperimentalDisabled && status.DockerSwarmInactive && status.DockerOomKillEnabled && status.DockerIPv4Forwarding && status.DockerBridgeNfIptables && status.DockerBridgeNfIp6tables && status.DockerDaemonFirewallEnabled && status.DockerDaemonForwardDrop && status.DockerDaemonSeccompConfined && status.DockerDaemonNoNewPrivileges && status.DockerDaemonICCDisabled && status.DockerDaemonLocalHosts && status.DockerDaemonExecRootProtected && status.DockerDaemonShutdownTimeoutBounded && status.DockerSeccomp && status.DockerAppArmor && status.DockerUserNamespace && status.DockerLiveRestore && status.DockerDefaultRuntimeRunc && status.DockerNoWarnings && status.DockerNoInsecureRegistries && status.DockerUserlandProxyDisabled && status.DockerRootDirProtected && status.DockerPluginDirsProtected && status.DockerStorageOverlay2 && status.DockerStorageDType && status.DockerServerVersionSupported && status.DockerOSTypeLinux && status.DockerLocalEndpoint && status.DockerSocketProtected && status.Nftables && status.NftablesUsable && status.CgroupV2 && status.CgroupControllersReady
 	if len(status.Errors) == 0 {
 		status.Errors = nil
 	}
@@ -1297,6 +1306,37 @@ func dockerDaemonExecRootProtected(path string) (bool, error) {
 		return false, fmt.Errorf("Docker daemon config %q must be a string", "exec-root")
 	}
 	return dockerRootDirProtected(execRoot)
+}
+
+func dockerDaemonShutdownTimeoutBounded(path string) (bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	var config map[string]json.RawMessage
+	if err := json.Unmarshal(content, &config); err != nil {
+		return false, fmt.Errorf("parse Docker daemon config: %w", err)
+	}
+	raw, ok := config["shutdown-timeout"]
+	if !ok {
+		return true, nil
+	}
+	token := strings.TrimSpace(string(raw))
+	if token == "" || token[0] == '"' {
+		return false, fmt.Errorf("Docker daemon config %q must be an integer number", "shutdown-timeout")
+	}
+	var value json.Number
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be an integer number", "shutdown-timeout")
+	}
+	seconds, err := value.Int64()
+	if err != nil {
+		return false, fmt.Errorf("Docker daemon config %q must be an integer number", "shutdown-timeout")
+	}
+	return seconds >= 1 && seconds <= maxDockerDaemonShutdownTimeoutSeconds, nil
 }
 
 func dockerInsecureRegistryCIDRsOnlyLoopback(output string) bool {

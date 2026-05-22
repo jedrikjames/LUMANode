@@ -2191,7 +2191,7 @@ exit 0
 
 	agent := New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
 	status := agent.runtimeStatus(context.Background())
-	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerDaemonExecRootProtected || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
+	if !status.Ready || !status.Docker || !status.DockerCgroupV2 || !status.DockerCgroupDriverSystemd || !status.DockerCgroupNamespacePrivate || !status.DockerDebugDisabled || !status.DockerExperimentalDisabled || !status.DockerSwarmInactive || !status.DockerOomKillEnabled || !status.DockerIPv4Forwarding || !status.DockerBridgeNfIptables || !status.DockerBridgeNfIp6tables || !status.DockerDaemonFirewallEnabled || !status.DockerDaemonForwardDrop || !status.DockerDaemonSeccompConfined || !status.DockerDaemonNoNewPrivileges || !status.DockerDaemonICCDisabled || !status.DockerDaemonLocalHosts || !status.DockerDaemonExecRootProtected || !status.DockerDaemonShutdownTimeoutBounded || !status.DockerLiveRestore || !status.DockerDefaultRuntimeRunc || !status.DockerNoWarnings || !status.DockerNoInsecureRegistries || !status.DockerUserlandProxyDisabled || !status.DockerRootDirProtected || !status.DockerPluginDirsProtected || !status.DockerStorageOverlay2 || !status.DockerStorageDType || !status.DockerServerVersionSupported || !status.DockerOSTypeLinux || !status.DockerLocalEndpoint || !status.DockerSocketProtected || !status.Nftables || !status.NftablesUsable || !status.CgroupV2 || !status.CgroupControllersReady {
 		t.Fatalf("expected ready runtime status, got %#v", status)
 	}
 	if !status.DockerSeccomp || !status.DockerAppArmor || !status.DockerUserNamespace {
@@ -2214,7 +2214,7 @@ exit 0
 	if health.Status != "ok" || health.NodeID != "node_local" {
 		t.Fatalf("expected ok node health response, got %#v", health)
 	}
-	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerDaemonExecRootProtected || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
+	if !health.Runtime.Ready || !health.Runtime.DockerDaemonFirewallEnabled || !health.Runtime.DockerDaemonForwardDrop || !health.Runtime.DockerDaemonSeccompConfined || !health.Runtime.DockerDaemonNoNewPrivileges || !health.Runtime.DockerDaemonICCDisabled || !health.Runtime.DockerDaemonLocalHosts || !health.Runtime.DockerDaemonExecRootProtected || !health.Runtime.DockerDaemonShutdownTimeoutBounded || !health.Runtime.DockerUserlandProxyDisabled || !health.Runtime.DockerPluginDirsProtected {
 		t.Fatalf("expected health runtime contract to expose daemon readiness fields, got %#v", health.Runtime)
 	}
 
@@ -2293,6 +2293,16 @@ exit 0
 	status = agent.runtimeStatus(context.Background())
 	if status.Ready || status.DockerDaemonExecRootProtected || status.Errors["dockerDaemonExecRoot"] == "" {
 		t.Fatalf("expected writable Docker daemon exec-root to fail readiness, got %#v", status)
+	}
+
+	daemonConfig = filepath.Join(tempDir, "daemon-unbounded-shutdown-timeout.json")
+	if err := os.WriteFile(daemonConfig, []byte(`{"no-new-privileges":true,"icc":false,"shutdown-timeout":300}`), 0o600); err != nil {
+		t.Fatalf("write daemon shutdown-timeout config: %v", err)
+	}
+	agent = New(config.Config{NodeID: "node_local", RuntimeCgroupControllersFile: cgroupFile, RuntimeDockerDaemonConfigFile: daemonConfig}, slog.Default())
+	status = agent.runtimeStatus(context.Background())
+	if status.Ready || status.DockerDaemonShutdownTimeoutBounded || status.Errors["dockerDaemonShutdownTimeout"] == "" {
+		t.Fatalf("expected unbounded Docker daemon shutdown-timeout to fail readiness, got %#v", status)
 	}
 }
 
@@ -3413,6 +3423,70 @@ func TestDockerDaemonExecRootProtected(t *testing.T) {
 	}
 	if protected, err := dockerDaemonExecRootProtected(malformedConfig); err == nil || protected {
 		t.Fatalf("expected malformed exec-root config to fail, protected=%v err=%v", protected, err)
+	}
+}
+
+func TestDockerDaemonShutdownTimeoutBounded(t *testing.T) {
+	tempDir := t.TempDir()
+	missing := filepath.Join(tempDir, "missing-daemon.json")
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(missing); err != nil || !bounded {
+		t.Fatalf("expected missing daemon config to keep bounded Docker shutdown timeout default, bounded=%v err=%v", bounded, err)
+	}
+
+	absentConfig := filepath.Join(tempDir, "absent-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(absentConfig, []byte(`{"no-new-privileges":true}`), 0o600); err != nil {
+		t.Fatalf("write absent shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(absentConfig); err != nil || !bounded {
+		t.Fatalf("expected absent shutdown-timeout config to pass, bounded=%v err=%v", bounded, err)
+	}
+
+	boundedConfig := filepath.Join(tempDir, "bounded-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(boundedConfig, []byte(`{"shutdown-timeout":30}`), 0o600); err != nil {
+		t.Fatalf("write bounded shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(boundedConfig); err != nil || !bounded {
+		t.Fatalf("expected bounded shutdown-timeout config to pass, bounded=%v err=%v", bounded, err)
+	}
+
+	zeroConfig := filepath.Join(tempDir, "zero-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(zeroConfig, []byte(`{"shutdown-timeout":0}`), 0o600); err != nil {
+		t.Fatalf("write zero shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(zeroConfig); err != nil || bounded {
+		t.Fatalf("expected zero shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	negativeConfig := filepath.Join(tempDir, "negative-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(negativeConfig, []byte(`{"shutdown-timeout":-1}`), 0o600); err != nil {
+		t.Fatalf("write negative shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(negativeConfig); err != nil || bounded {
+		t.Fatalf("expected negative shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	tooHighConfig := filepath.Join(tempDir, "too-high-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(tooHighConfig, []byte(`{"shutdown-timeout":121}`), 0o600); err != nil {
+		t.Fatalf("write too-high shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(tooHighConfig); err != nil || bounded {
+		t.Fatalf("expected too-high shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	stringConfig := filepath.Join(tempDir, "string-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(stringConfig, []byte(`{"shutdown-timeout":"30"}`), 0o600); err != nil {
+		t.Fatalf("write string shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(stringConfig); err == nil || bounded {
+		t.Fatalf("expected string shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
+	}
+
+	fractionConfig := filepath.Join(tempDir, "fraction-shutdown-timeout-daemon.json")
+	if err := os.WriteFile(fractionConfig, []byte(`{"shutdown-timeout":30.5}`), 0o600); err != nil {
+		t.Fatalf("write fractional shutdown-timeout daemon config: %v", err)
+	}
+	if bounded, err := dockerDaemonShutdownTimeoutBounded(fractionConfig); err == nil || bounded {
+		t.Fatalf("expected fractional shutdown-timeout config to fail, bounded=%v err=%v", bounded, err)
 	}
 }
 
